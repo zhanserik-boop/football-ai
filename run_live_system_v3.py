@@ -12,6 +12,7 @@ READINESS_REPORT = "v3_readiness_report.py"
 FORWARD_TEST_SCORECARD = "v3_forward_test_scorecard.py"
 SHADOW_RISK_ENGINE = "v3_shadow_risk_engine.py"
 RUNTIME_CHECKPOINT = "v3_runtime_checkpoint.py"
+BACKUP_GUARD = "v3_backup_guard.py"
 
 _original_run_script = base.run_script
 
@@ -38,6 +39,7 @@ def run_script_with_v3_context(filename):
         _original_run_script(FORWARD_TEST_SCORECARD)
         _original_run_script(SHADOW_RISK_ENGINE)
         _original_run_script(RUNTIME_CHECKPOINT)
+        _original_run_script(BACKUP_GUARD)
         _original_run_script(SHADOW_NOTIFIER)
 
     return ok
@@ -56,6 +58,7 @@ def main():
             FORWARD_TEST_SCORECARD,
             SHADOW_RISK_ENGINE,
             RUNTIME_CHECKPOINT,
+            BACKUP_GUARD,
         )
         if not os.path.exists(path)
     ]
@@ -64,7 +67,7 @@ def main():
 
     base.run_script = run_script_with_v3_context
     _original_run_script(READINESS_REPORT)
-    print("V3 orchestration: Value Gate + Outcome Audit + Scorecard + Risk + Checkpoint + Telegram + Health enabled")
+    print("V3 orchestration: Value Gate + Outcome Audit + Scorecard + Risk + Checkpoint + Backup Guard + Telegram + Health enabled")
     base.main()
 
 
