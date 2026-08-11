@@ -28,6 +28,21 @@ class FakeClient:
     def get(self, endpoint, params=None, ttl_minutes=0, allow_stale=False):
         self.api_requests += 1
         self.calls.append((endpoint, dict(params or {})))
+        if endpoint == "/players/squads":
+            return {
+                "response": [{
+                    "team": {"id": 10},
+                    "players": [
+                        {
+                            "id": item["player"]["id"],
+                            "name": item["player"]["name"],
+                            "age": item["player"]["age"],
+                            "position": item["statistics"][0]["games"]["position"],
+                        }
+                        for item in self.items if item["player"]["id"] != 999
+                    ],
+                }],
+            }, {"source": "TEST"}
         return {
             "response": self.items,
             "paging": {"current": 1, "total": 1},
@@ -56,21 +71,29 @@ class V4PlayerValueBuilderTests(unittest.TestCase):
         self.assertEqual(row["goals"] + row["assists"], 7)
 
     def test_builder_uses_team_season_pages_not_player_requests(self):
-        items = [player_item(1, "Keeper", "Goalkeeper", 1000, 11, 7.0)]
-        items += [
-            player_item(index, f"Player {index}", "Defender", 900-index, 10, 6.8)
-            for index in range(2, 17)
-        ]
+        items = [player_item(1, "Keeper", "Goalkeeper", 1200, 14, 7.0)]
+        player_id = 2
+        for position, count in (("Defender", 6), ("Midfielder", 6), ("Attacker", 5)):
+            for _ in range(count):
+                items.append(player_item(
+                    player_id, f"Player {player_id}", position,
+                    1100-player_id, 12, 6.8,
+                ))
+                player_id += 1
+        items.append(player_item(999, "Transferred Player", "Attacker", 3000, 34, 7.8))
         client = FakeClient(items)
         profile = builder.fetch_team_profile(
             client, {"team_id": 10, "team_name": "Alpha"}, [2026]
         )
-        self.assertEqual(client.api_requests, 1)
-        self.assertEqual(client.calls[0][0], "/players")
-        self.assertNotIn("player", client.calls[0][1])
+        self.assertEqual(client.api_requests, 2)
+        self.assertEqual({call[0] for call in client.calls}, {"/players", "/players/squads"})
+        self.assertTrue(all("player" not in params for _, params in client.calls))
         self.assertEqual(profile["data_quality"], "HIGH")
         self.assertEqual(len(profile["baseline_player_ids"]), 11)
         self.assertEqual(profile["baseline_player_ids"][0], 1)
+        self.assertNotIn(999, profile["baseline_player_ids"])
+        self.assertIn(profile["baseline_formation"], builder.BASELINE_FORMATIONS)
+        self.assertTrue(profile["baseline_valid"])
 
 
 if __name__ == "__main__":
