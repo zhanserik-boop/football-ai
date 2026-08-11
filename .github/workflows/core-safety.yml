@@ -53,3 +53,6 @@ jobs:
 
       - name: Build historical context database
         run: python historical_context_builder.py
+
+      - name: Audit historical lineup schema
+        run: python historical_lineup_schema_audit.py
