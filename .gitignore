@@ -94,6 +94,9 @@ runtime_checkpoints/
 runtime_restore_*/
 v3_backup_guard_status.json
 v3_backup_guard_notify_state.json
+v3_supervisor_expectation.json
+v3_external_supervisor_status.json
+v3_external_supervisor_notify_state.json
 
 # BTTS live generated outputs
 btts_live_fixtures.csv

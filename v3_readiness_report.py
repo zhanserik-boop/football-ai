@@ -58,6 +58,9 @@ V3_REQUIRED_FILES = (
     "v3_shadow_risk_engine.py",
     "v3_runtime_checkpoint.py",
     "v3_backup_guard.py",
+    "v3_external_supervisor.py",
+    "install_v3_supervisor.ps1",
+    "uninstall_v3_supervisor.ps1",
 )
 
 FIELDS = (
