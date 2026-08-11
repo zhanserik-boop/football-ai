@@ -5,6 +5,7 @@ import run_live_system as base
 LIVE_COACH_CONTEXT = "live_coach_context.py"
 MARKET_TIMELINE = "market_timeline_engine.py"
 SHADOW_VALUE_GATE = "shadow_value_gate_v1.py"
+SHADOW_OUTCOME_REPORT = "shadow_value_gate_outcome_report.py"
 
 _original_run_script = base.run_script
 
@@ -22,6 +23,11 @@ def run_script_with_v3_context(filename):
         _original_run_script(MARKET_TIMELINE)
         _original_run_script(SHADOW_VALUE_GATE)
 
+    # Base refreshes closing lines/results on its normal low-frequency cycle.
+    # Reuse that cache to evaluate Value Gate with zero additional API calls.
+    if filename == base.CLV_REPORT:
+        _original_run_script(SHADOW_OUTCOME_REPORT)
+
     return ok
 
 
@@ -31,6 +37,7 @@ def main():
             LIVE_COACH_CONTEXT,
             MARKET_TIMELINE,
             SHADOW_VALUE_GATE,
+            SHADOW_OUTCOME_REPORT,
         )
         if not os.path.exists(path)
     ]
@@ -38,7 +45,7 @@ def main():
         raise SystemExit("Missing V3 live files: " + ", ".join(missing))
 
     base.run_script = run_script_with_v3_context
-    print("V3 orchestration: Coach + Timeline + Shadow Value Gate enabled")
+    print("V3 orchestration: Coach + Timeline + Value Gate + Outcome Audit enabled")
     base.main()
 
 
