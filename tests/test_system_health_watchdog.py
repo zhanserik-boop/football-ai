@@ -74,6 +74,17 @@ class SystemHealthWatchdogTests(unittest.TestCase):
         event = mod.notification_event(healthy, previous)
         self.assertIn("RECOVERED", event["message"])
 
+    def test_history_compares_only_latest_snapshot(self):
+        old_critical = mod.build_health(None, now=NOW - timedelta(minutes=10))
+        old_healthy = mod.build_health(
+            state(heartbeat=(NOW - timedelta(minutes=5)).isoformat()),
+            now=NOW - timedelta(minutes=5),
+        )
+        current = mod.build_health(state(), now=NOW)
+        self.assertEqual(
+            mod.history_change(current, old_critical + old_healthy), []
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
