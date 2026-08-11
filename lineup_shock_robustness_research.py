@@ -151,6 +151,26 @@ def stability_gate(summary):
     ):
         return False, "Aggregate confidence interval failed"
 
+    high_quality = summary[summary["scope"] == "QUALITY_HIGH"]
+    if high_quality.empty:
+        return False, "Missing HIGH-quality scope"
+    high_quality = high_quality.iloc[0]
+    if not (
+        high_quality["rows"] >= MIN_TOTAL_ROWS
+        and high_quality["avg_signed_move_ci_low"] > 0
+        and high_quality["large_move_hit_ci_low"] > 0.55
+    ):
+        return False, "HIGH-quality confidence interval failed"
+
+    medium_quality = summary[summary["scope"] == "QUALITY_MEDIUM"]
+    if not medium_quality.empty:
+        medium_quality = medium_quality.iloc[0]
+        if (
+            medium_quality["rows"] >= MIN_SIDE_ROWS
+            and medium_quality["avg_signed_close_move"] <= 0
+        ):
+            return False, "MEDIUM-quality stability failed"
+
     seasons = summary[
         summary["scope"].str.startswith("SEASON_")
         & (summary["rows"] >= MIN_SEASON_ROWS)
@@ -200,8 +220,10 @@ def build():
             print(
                 f"{row.scope}: rows={row.rows}, "
                 f"avg_signed_move={row.avg_signed_close_move:+.4f}, "
+                f"mean_ci=[{row.avg_signed_move_ci_low:+.4f}, {row.avg_signed_move_ci_high:+.4f}], "
                 f"nonflat_hit={100.0 * row.nonflat_direction_hit:.1f}%, "
-                f"large_hit={100.0 * row.large_move_direction_hit:.1f}%"
+                f"large_hit={100.0 * row.large_move_direction_hit:.1f}%, "
+                f"large_ci=[{100.0 * row.large_move_hit_ci_low:.1f}%, {100.0 * row.large_move_hit_ci_high:.1f}%]"
                 if pd.notna(row.avg_signed_close_move)
                 and pd.notna(row.nonflat_direction_hit)
                 and pd.notna(row.large_move_direction_hit)
