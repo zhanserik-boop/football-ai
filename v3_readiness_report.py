@@ -57,6 +57,7 @@ V3_REQUIRED_FILES = (
     "v3_forward_test_scorecard.py",
     "v3_shadow_risk_engine.py",
     "v3_runtime_checkpoint.py",
+    "v3_backup_guard.py",
 )
 
 FIELDS = (
