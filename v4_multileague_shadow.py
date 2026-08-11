@@ -19,7 +19,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import date as date_type, datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -35,6 +35,7 @@ MIN_FORM_MATCHES = 5
 MIN_BOOKMAKERS = 2
 LINEUP_QUERY_WINDOW_MINUTES = 90.0
 SHADOW_ONLY = True
+MARKET_CONSENSUS_VERSION = 2
 
 
 def utc_now():
@@ -282,6 +283,27 @@ def match_target(target, fixtures):
     return (candidate, score) if score >= 0.70 else (None, score)
 
 
+def closest_fixture_candidates(target, fixtures, limit=3):
+    scored = []
+    for item in fixtures:
+        candidate = fixture_candidate(item)
+        home_score = name_similarity(target["home_team"], candidate["home_team"])
+        away_score = name_similarity(target["away_team"], candidate["away_team"])
+        scored.append(((home_score + away_score) / 2.0, candidate))
+    scored.sort(key=lambda row: row[0], reverse=True)
+    return [
+        {
+            "score": round(score, 3),
+            "fixture_id": candidate["fixture_id"],
+            "kickoff_utc": candidate["kickoff_utc"],
+            "home_team": candidate["home_team"],
+            "away_team": candidate["away_team"],
+            "competition": candidate["competition"],
+        }
+        for score, candidate in scored[:limit]
+    ]
+
+
 def completed_team_metrics(payload, team_id, now=None):
     now = now or utc_now()
     matches = []
@@ -449,13 +471,38 @@ def market_consensus(rows):
         })
     if not paired:
         return None
-    counts = Counter(row["home_line"] for row in paired)
+
+    # API-Football can return a ladder of alternative handicaps for every
+    # bookmaker. The market's main line is the paired price closest to balanced,
+    # not the median of every offered alternative line.
+    per_bookmaker = defaultdict(list)
+    for row in paired:
+        per_bookmaker[row["bookmaker_id"]].append(row)
+
+    selected = []
+    for book_rows in per_bookmaker.values():
+        main = min(
+            book_rows,
+            key=lambda row: (
+                abs(math.log(row["home_odd"] / row["away_odd"])),
+                abs((1.0 / row["home_odd"] + 1.0 / row["away_odd"]) - 1.05),
+                abs(row["home_line"]),
+            ),
+        )
+        selected.append(main)
+
+    counts = Counter(row["home_line"] for row in selected)
     max_count = max(counts.values())
     candidate_lines = [line for line, count in counts.items() if count == max_count]
-    ordered = sorted(row["home_line"] for row in paired)
-    median = ordered[len(ordered) // 2]
+    ordered = sorted(row["home_line"] for row in selected)
+    middle = len(ordered) // 2
+    median = (
+        ordered[middle]
+        if len(ordered) % 2
+        else round_quarter((ordered[middle - 1] + ordered[middle]) / 2.0)
+    )
     consensus_line = min(candidate_lines, key=lambda line: abs(line - median))
-    same = [row for row in paired if row["home_line"] == consensus_line]
+    same = [row for row in selected if row["home_line"] == consensus_line]
     home_avg = sum(row["home_odd"] for row in same) / len(same)
     away_avg = sum(row["away_odd"] for row in same) / len(same)
     home_imp = 1.0 / home_avg
@@ -468,6 +515,8 @@ def market_consensus(rows):
         "bookmakers": len(same),
         "best_home_odds": round(max(row["home_odd"] for row in same), 4),
         "best_away_odds": round(max(row["away_odd"] for row in same), 4),
+        "bookmakers_with_main_line": len(selected),
+        "consensus_version": MARKET_CONSENSUS_VERSION,
     }
 
 
@@ -536,7 +585,12 @@ def market_agent(consensus, provider_update, state_row, fingerprint, fetched_utc
         return {
             "status": "MISSING", "side": "NEUTRAL", "reason": "Asian Handicap market unavailable"
         }
-    opening = state_row.get("opening_home_handicap")
+    state_version = int(safe_float(state_row.get("market_consensus_version")) or 0)
+    opening = (
+        state_row.get("opening_home_handicap")
+        if state_version == MARKET_CONSENSUS_VERSION
+        else None
+    )
     if safe_float(opening) is None:
         opening = consensus["home_handicap"]
     current = consensus["home_handicap"]
@@ -559,6 +613,7 @@ def market_agent(consensus, provider_update, state_row, fingerprint, fetched_utc
         "provider_age_minutes": None if provider_age is None else round(provider_age, 2),
         "freshness": freshness, "changed_since_last_run": changed,
         "fetched_utc": fetched_utc, "reason": f"AH {current:+.2f} across {consensus['bookmakers']} books",
+        "consensus_version": MARKET_CONSENSUS_VERSION,
         **consensus,
     }
 
@@ -753,8 +808,12 @@ def moderator_agent(quant, market, lineup, matchup, underdog, draw, context, qua
 def snapshot_state_update(state, fixture_id, market, fingerprint, lineup, now):
     row = state.setdefault("fixtures", {}).setdefault(fixture_id, {})
     if market.get("status") == "OK":
+        if row.get("market_consensus_version") != MARKET_CONSENSUS_VERSION:
+            row.pop("opening_home_handicap", None)
+            row.pop("opening_seen_utc", None)
         row.setdefault("opening_home_handicap", market["current_home_handicap"])
         row.setdefault("opening_seen_utc", now.isoformat())
+        row["market_consensus_version"] = MARKET_CONSENSUS_VERSION
         row["last_home_handicap"] = market["current_home_handicap"]
         row["last_odds_fingerprint"] = fingerprint
         row["last_odds_seen_utc"] = now.isoformat()
@@ -801,10 +860,38 @@ def collect_and_analyze(targets, client, timezone_name, state, now=None):
             injury_errors.append(injury_meta["error"])
     injury_map = injuries_by_fixture({"response": injury_payloads})
 
-    matched = []
-    for target in targets:
-        fixture, score = match_target(target, all_fixture_items)
-        matched.append((target, fixture, score))
+    def build_matches():
+        result = []
+        for target in targets:
+            fixture, score = match_target(target, all_fixture_items)
+            result.append((target, fixture, score))
+        return result
+
+    matched = build_matches()
+
+    # Some providers assign late local kickoffs to the adjacent schedule date.
+    # Query the neighbouring dates only when the primary date leaves targets
+    # unmatched, keeping the normal request budget unchanged.
+    if any(fixture is None for _, fixture, _ in matched):
+        primary = {date_type.fromisoformat(value) for value in target_dates}
+        adjacent = sorted(
+            (
+                {(day - timedelta(days=1)).isoformat() for day in primary}
+                | {(day + timedelta(days=1)).isoformat() for day in primary}
+            )
+            - set(target_dates)
+        )
+        for adjacent_date in adjacent:
+            payload, meta = client.get(
+                "/fixtures",
+                {"date": adjacent_date, "timezone": timezone_name},
+                ttl_minutes=15,
+                allow_stale=True,
+            )
+            all_fixture_items.extend(payload.get("response", []))
+            if meta.get("error"):
+                fixture_errors.append(meta["error"])
+        matched = build_matches()
 
     team_ids = {}
     for _, fixture, _ in matched:
@@ -835,8 +922,12 @@ def collect_and_analyze(targets, client, timezone_name, state, now=None):
             )
             output.append({
                 "target": target, "fixture": None, "match_score": round(match_score, 3),
+                "closest_candidates": closest_fixture_candidates(target, all_fixture_items),
                 "agents": {"data_quality": quality},
-                "moderator": {"decision": "PASS", "side": "", "confidence": 0.0, "reason": "Fixture not found in API-Football"},
+                "moderator": {
+                    "decision": "PASS", "side": "", "confidence": 0.0,
+                    "reason": f"Fixture not found in API-Football; best name score {match_score:.2f}",
+                },
                 "shadow_only": True,
             })
             continue
@@ -938,7 +1029,9 @@ CSV_FIELDS = [
     "market_home_ah", "market_bookmakers", "market_freshness",
     "lineup_status", "matchup_side", "underdog_resistance",
     "draw_pressure", "context_side", "decision", "bet_side",
-    "confidence", "line_value", "reason", "shadow_only",
+    "confidence", "line_value", "data_quality_codes", "match_score",
+    "market_provider_update_utc", "post_lineup_market_evidence",
+    "reason", "shadow_only",
 ]
 
 
@@ -973,6 +1066,12 @@ def flatten_result(result, generated_utc):
         "bet_side": moderator.get("side", ""),
         "confidence": moderator.get("confidence", ""),
         "line_value": moderator.get("line_value", ""),
+        "data_quality_codes": ",".join(
+            (agents.get("data_quality") or {}).get("codes", [])
+        ),
+        "match_score": result.get("match_score", ""),
+        "market_provider_update_utc": market.get("provider_update_utc", ""),
+        "post_lineup_market_evidence": result.get("post_lineup_market_evidence", False),
         "reason": moderator.get("reason", ""),
         "shadow_only": "YES",
     }
