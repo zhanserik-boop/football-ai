@@ -105,3 +105,18 @@ responses keep repeat runs within quota.
 python -m unittest tests.test_v4_multileague_shadow -v
 python .\v3_freeze_guard.py
 ```
+
+## Player-value research
+
+After a prediction run has resolved fixture team IDs, build cached team-relative
+player profiles with paginated team-season requests:
+
+```powershell
+python .\v4_player_value_builder.py
+```
+
+The builder combines weighted minutes, starts, rating and goal contributions,
+selects a research baseline XI, and writes `v4_player_values.json`. It does not
+make one request per player. The output is explicitly `RESEARCH_ONLY` and cannot
+remove `LINEUP_VALUE_UNVALIDATED` until coverage and forward outcome validation
+pass.
