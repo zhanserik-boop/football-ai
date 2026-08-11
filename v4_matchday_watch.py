@@ -74,6 +74,8 @@ def build_parser():
     parser.add_argument("--input", default="v4_target_matches_20260811.csv")
     parser.add_argument("--timezone", default="Asia/Almaty")
     parser.add_argument("--json", default="v4_multileague_predictions.json")
+    parser.add_argument("--lineup-router", default="v4_lineup_source_router.py")
+    parser.add_argument("--lineup-audit-json", default="v4_lineup_source_audit.json")
     parser.add_argument("--max-hours", type=float, default=12.0)
     return parser
 
@@ -98,6 +100,19 @@ def main(argv=None):
         if completed.returncode != 0:
             print("WATCH STATUS: RUNNER_FAILED")
             return completed.returncode
+
+        router_path = Path(args.lineup_router)
+        if router_path.exists():
+            routed = subprocess.run(
+                [
+                    sys.executable, str(router_path),
+                    "--predictions", args.json,
+                    "--json", args.lineup_audit_json,
+                ],
+                check=False,
+            )
+            if routed.returncode != 0:
+                print("LINEUP ROUTER STATUS: FAILED_CLOSED — API-Football watcher continues")
 
         document = load_document(args.json)
         pending = pending_lineups(document)
