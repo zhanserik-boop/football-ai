@@ -50,3 +50,6 @@ jobs:
 
       - name: Run frozen core invariant tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Build historical context database
+        run: python historical_context_builder.py
