@@ -549,9 +549,14 @@ def odds_fingerprint(rows):
     return hashlib.sha256(json.dumps(canonical).encode("utf-8")).hexdigest()
 
 
-def lineup_summary(payload, home_team_id, away_team_id):
-    result = {"confirmed": False, "home_starters": 0, "away_starters": 0, "formations": {}}
-    for team_data in payload.get("response", []):
+def lineup_summary(payload, home_team_id, away_team_id, query_attempted=False):
+    provider_rows = payload.get("response", [])
+    result = {
+        "confirmed": False, "home_starters": 0, "away_starters": 0,
+        "formations": {}, "query_attempted": bool(query_attempted),
+        "provider_records": len(provider_rows),
+    }
+    for team_data in provider_rows:
         team = team_data.get("team", {})
         team_id = team.get("id")
         starters = team_data.get("startXI") or []
@@ -644,17 +649,31 @@ def lineup_agent(lineup, home_injuries, away_injuries):
     away_count = len([x for x in away_injuries if x])
     injury_delta = away_count - home_count
     side = "HOME" if injury_delta >= 2 else "AWAY" if injury_delta <= -2 else "NEUTRAL"
-    status = "CONFIRMED" if lineup.get("confirmed") else "WAITING"
+    if lineup.get("confirmed"):
+        status = "CONFIRMED"
+        reason = "confirmed XI received for both teams; cross-league player values are not yet validated"
+    elif not lineup.get("query_attempted"):
+        status = "NOT_QUERIED"
+        reason = "outside the active lineup query attempt or no query has run yet"
+    elif lineup.get("provider_records", 0) == 0:
+        status = "NOT_PUBLISHED"
+        reason = "API-Football has not published lineup records yet; retry is required"
+    else:
+        status = "INCOMPLETE"
+        reason = (
+            "API-Football returned an incomplete XI: "
+            f"home {lineup.get('home_starters', 0)}/11, "
+            f"away {lineup.get('away_starters', 0)}/11"
+        )
     return {
         "status": status, "side": side, "home_injuries": home_count,
         "away_injuries": away_count, "home_starters": lineup.get("home_starters", 0),
         "away_starters": lineup.get("away_starters", 0),
         "availability_delta_home": injury_delta,
         "value_quality": "UNVALIDATED_CROSS_LEAGUE",
-        "reason": (
-            "confirmed XI for both teams; cross-league player values are not yet validated"
-            if status == "CONFIRMED" else "confirmed XI not yet available"
-        ),
+        "query_attempted": lineup.get("query_attempted", False),
+        "provider_records": lineup.get("provider_records", 0),
+        "reason": reason,
     }
 
 
@@ -808,7 +827,7 @@ def moderator_agent(quant, market, lineup, matchup, underdog, draw, context, qua
 
     if lineup["status"] != "CONFIRMED":
         decision = "WATCH"
-        reason = "Preliminary edge only; waiting for confirmed XI"
+        reason = "Preliminary edge only; " + lineup.get("reason", "waiting for confirmed XI")
     elif not post_lineup_market:
         decision = "WATCH"
         reason = "Confirmed XI available; post-lineup market reaction not proven"
@@ -1045,7 +1064,8 @@ def collect_and_analyze(targets, client, timezone_name, state, now=None):
                 allow_stale=False,
             )
         lineup_raw = lineup_summary(
-            lineup_payload, fixture["home_team_id"], fixture["away_team_id"]
+            lineup_payload, fixture["home_team_id"], fixture["away_team_id"],
+            query_attempted=should_query_lineup,
         )
         injury_entry = injury_map.get(fixture_id, {})
         home_injuries = injury_entry.get(str(fixture["home_team_id"]), [])
