@@ -9,6 +9,8 @@ not import, edit, or influence the frozen V3 EPL runtime. It cannot place bets.
 2. Market Agent: current/opening AH, bookmaker consensus, movement and freshness.
    When a bookmaker supplies an alternative-line ladder, V4 selects that
    bookmaker's balanced main line before building cross-book consensus.
+   API-Football's `Home` and `Away` prices are paired by the same numeric AH
+   label; the label is interpreted as the home-team handicap.
 3. Lineup Agent: confirmed XI availability and injury imbalance. The first
    release explicitly marks cross-league player values as unvalidated.
 4. Matchup Agent: attack-versus-defence pressure.
