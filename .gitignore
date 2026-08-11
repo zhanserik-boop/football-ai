@@ -51,6 +51,8 @@ epl_market_move_direction_summary.csv
 epl_historical_lineup_shock.csv
 epl_shadow_value_gate.csv
 epl_shadow_value_gate_summary.csv
+epl_lineup_shock_robustness.csv
+epl_lineup_shock_robustness_summary.csv
 new_manager_effect_events.csv
 new_manager_effect_summary.csv
 new_manager_effect_by_season.csv
