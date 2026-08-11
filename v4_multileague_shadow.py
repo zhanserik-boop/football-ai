@@ -36,7 +36,7 @@ MIN_FORM_MATCHES = 5
 MIN_BOOKMAKERS = 2
 LINEUP_QUERY_WINDOW_MINUTES = 90.0
 SHADOW_ONLY = True
-MARKET_CONSENSUS_VERSION = 2
+MARKET_CONSENSUS_VERSION = 3
 
 
 def utc_now():
@@ -459,7 +459,12 @@ def extract_ah_rows(payload):
 def market_consensus(rows):
     by_book_line = defaultdict(dict)
     for row in rows:
-        home_line = row["handicap"] if row["side"] == "HOME" else -row["handicap"]
+        # API-Football's AH ladder pairs Home and Away prices under the same
+        # numeric provider label (for example Home -0.75 / Away -0.75).
+        # The label itself is the home-team handicap. Negating the Away label
+        # cross-pairs unrelated alternatives and pushes selection to the edge
+        # of the ladder.
+        home_line = row["handicap"]
         by_book_line[(row["bookmaker_id"], home_line)][row["side"]] = row
 
     paired = []
