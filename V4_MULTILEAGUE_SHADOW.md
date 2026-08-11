@@ -59,6 +59,21 @@ XI is still unavailable. It stops when no pre-match fixture is waiting, after
 the final checkpoint, or at the configured `--max-hours` limit. This avoids
 continuous polling while covering API-Football's usual publication window.
 
+Each watcher cycle also runs `v4_lineup_source_router.py`. The router uses the
+public JSON feed behind UEFA's match centre for Champions League, Europa League
+and Conference League fixtures, matches the fixture by teams and kickoff, and
+compares the official starters with API-Football. It writes:
+
+- `v4_lineup_source_audit.csv`
+- `v4_lineup_source_audit.json`
+
+The statuses are `UEFA_ONLY_RESEARCH`, `API_FOOTBALL_ONLY`,
+`VERIFIED_TWO_SOURCES`, `SOURCE_CONFLICT`, or `WAITING`. UEFA-only data remains
+research evidence: it cannot clear the lineup-value veto or enter Value Gate.
+A source conflict is fail-closed. The UEFA feed is public but undocumented and
+has no SLA, so it is isolated behind this adapter and cached rather than treated
+as a production dependency.
+
 ## Safety and timing
 
 - A fixture whose kickoff has passed or whose provider status is no longer
