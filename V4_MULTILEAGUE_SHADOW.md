@@ -7,6 +7,8 @@ not import, edit, or influence the frozen V3 EPL runtime. It cannot place bets.
 
 1. Quant Agent: recent weighted team strength and Fair Asian Handicap.
 2. Market Agent: current/opening AH, bookmaker consensus, movement and freshness.
+   When a bookmaker supplies an alternative-line ladder, V4 selects that
+   bookmaker's balanced main line before building cross-book consensus.
 3. Lineup Agent: confirmed XI availability and injury imbalance. The first
    release explicitly marks cross-league player values as unvalidated.
 4. Matchup Agent: attack-versus-defence pressure.
@@ -50,6 +52,8 @@ For a different slate, copy the CSV and pass `--input`.
 
 The first run stores the opening observed AH. A later run near kickoff can then
 measure movement and establish whether the market updated after confirmed XI.
+The runner also checks adjacent schedule dates only when a target cannot be
+matched on its requested local date and records closest candidates for diagnosis.
 
 ## API budget
 
