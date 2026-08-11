@@ -43,6 +43,8 @@ master_decisions_history.csv
 fixture_results_live.csv
 post_lineup_clv_report.csv
 post_lineup_bets_report.csv
+market_timeline_live.csv
+signal_audit_ledger.csv
 
 # BTTS live generated outputs
 btts_live_fixtures.csv
