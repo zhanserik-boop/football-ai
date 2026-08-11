@@ -30,7 +30,6 @@ jobs:
           python - <<'PY'
           import pathlib
           import py_compile
-
           failures = []
           for path in pathlib.Path('.').rglob('*.py'):
               if any(part in {'.git', 'archive', '__pycache__'} for part in path.parts):
@@ -39,12 +38,10 @@ jobs:
                   py_compile.compile(str(path), doraise=True)
               except Exception as exc:
                   failures.append((str(path), repr(exc)))
-
           if failures:
               for path, exc in failures:
                   print(f"COMPILE FAIL: {path}: {exc}")
               raise SystemExit(1)
-
           print("Tracked Python compile: PASS")
           PY
 
@@ -65,3 +62,9 @@ jobs:
 
       - name: Build market-anchored fair AH research
         run: python market_anchored_fair_ah.py
+
+      - name: Build extended possession / shot style context
+        run: python extended_style_context_builder.py
+
+      - name: Compare enriched Fair AH V2
+        run: python market_anchored_fair_ah_v2.py
