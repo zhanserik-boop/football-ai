@@ -42,6 +42,9 @@ epl_coach_history.csv
 epl_coach_context.csv
 new_manager_effect_events.csv
 new_manager_effect_summary.csv
+new_manager_effect_by_season.csv
+new_manager_effect_matched_controls.csv
+new_manager_effect_matched_summary.csv
 
 # Live generated outputs
 market_snapshots_v2.csv
