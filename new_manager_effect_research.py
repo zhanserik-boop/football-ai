@@ -135,9 +135,19 @@ def build_placebo_candidates(df, pre_window=PRE_WINDOW, post_windows=POST_WINDOW
                 metrics = _window_record(team_rows, pos, int(n), pre_window=pre_window)
                 if metrics is None:
                     continue
-                # A placebo must be a stable-coach window, not a hidden manager transition.
+                # A placebo must be a genuinely stable-coach window on both sides.
                 pre = team_rows.iloc[pos - pre_window:pos]
                 post = team_rows.iloc[pos:pos + int(n)]
+                anchor_spell = anchor.get("coach_spell_id")
+                if "coach_spell_id" in team_rows.columns:
+                    if pre["coach_spell_id"].nunique(dropna=False) != 1:
+                        continue
+                    if pre.iloc[-1].get("coach_spell_id") != anchor_spell:
+                        continue
+                    if post["coach_spell_id"].nunique(dropna=False) != 1:
+                        continue
+                    if post.iloc[0].get("coach_spell_id") != anchor_spell:
+                        continue
                 if int(pre["coach_change_flag"].sum()) != 0 or int(post["coach_change_flag"].sum()) != 0:
                     continue
                 rec = {
