@@ -97,6 +97,8 @@ v3_backup_guard_notify_state.json
 v3_supervisor_expectation.json
 v3_external_supervisor_status.json
 v3_external_supervisor_notify_state.json
+v3_daily_digest_state.json
+v3_daily_digest_status.json
 
 # BTTS live generated outputs
 btts_live_fixtures.csv
