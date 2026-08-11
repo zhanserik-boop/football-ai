@@ -121,3 +121,16 @@ selects the strongest valid baseline formation from common 3/4/5-defender
 shapes, and writes `v4_player_values.json`. It does not make one request per
 player. The output is explicitly `RESEARCH_ONLY` and cannot remove
 `LINEUP_VALUE_UNVALIDATED` until coverage and forward outcome validation pass.
+
+When confirmed XI data has been captured, calculate the isolated numerical
+lineup proxy with no additional API calls:
+
+```powershell
+python .\v4_lineup_shock_research.py
+```
+
+The research report requires HIGH player profiles and at least 10/11 valued
+starters for both teams. It records missing baseline players, XI coverage,
+team-strength loss, a goal-margin adjustment proxy and an Adjusted Fair AH
+proxy. The scale remains unapproved and cannot influence the live Value Gate
+until historical calibration and forward validation pass.
