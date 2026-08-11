@@ -3,7 +3,6 @@ import csv
 import json
 import re
 import time
-import hashlib
 
 from datetime import datetime, timedelta, timezone
 
@@ -11,6 +10,7 @@ import requests
 from dotenv import load_dotenv
 
 from live_lineup_engine import LiveLineupEngine
+from odds_provider import build_odds_provider
 
 
 # =========================================================
@@ -37,6 +37,7 @@ AH_BET_ID = 4
 SHOCK_THRESHOLD = 1.5
 LOOKAHEAD_HOURS = 48
 MAIN_LOOP_SECONDS = 5 * 60
+ODDS_PROVIDER_NAME = os.getenv("FOOTBALL_AI_ODDS_PROVIDER", "api-football")
 
 SNAPSHOT_FILE = "market_snapshots_v2.csv"
 LINEUP_FILE = "live_lineups_v2.csv"
@@ -82,6 +83,14 @@ def api_get(endpoint, params=None):
         return None
 
 
+# Odds source is now provider-agnostic. Fixture/lineup API remains unchanged.
+odds_provider = build_odds_provider(
+    ODDS_PROVIDER_NAME,
+    api_get=api_get,
+    bet_id=AH_BET_ID,
+)
+
+
 # =========================================================
 # STATE
 # =========================================================
@@ -93,7 +102,6 @@ def default_state():
         "lineup_first_seen": {},
         "lineup_results": {},
         "signal_entries": {},
-        # Per-fixture audit of what /odds actually changed.
         "odds_freshness": {},
     }
 
@@ -345,73 +353,8 @@ def save_lineups(fixture, lineups, first_seen):
 # AH ODDS + FRESHNESS
 # =========================================================
 
-def odds_fingerprint(rows):
-    canonical = sorted(
-        (
-            str(x.get("bookmaker_id", "")),
-            str(x.get("bookmaker", "")),
-            str(x.get("value", "")),
-            str(x.get("odd", "")),
-        )
-        for x in rows
-    )
-    raw = json.dumps(canonical, separators=(",", ":"), ensure_ascii=False)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
 def get_ah_odds(fixture_id):
-    fetched_at = utc_now().isoformat()
-
-    data = api_get(
-        "/odds",
-        {
-            "fixture": fixture_id,
-            "bet": AH_BET_ID,
-        },
-    )
-
-    if not data:
-        return [], {
-            "fetched_at_utc": fetched_at,
-            "provider_update_utc": None,
-            "fingerprint": None,
-        }
-
-    rows = []
-    provider_updates = []
-
-    for fixture_data in data.get("response", []):
-        # Some API payload versions may expose an update field. The
-        # pre-match docs do not guarantee it, so this is optional only.
-        provider_update = fixture_data.get("update")
-        if provider_update:
-            provider_updates.append(str(provider_update))
-
-        for bookmaker in fixture_data.get("bookmakers", []):
-            bookmaker_id = bookmaker.get("id")
-            bookmaker_name = bookmaker.get("name")
-
-            for bet in bookmaker.get("bets", []):
-                if bet.get("id") != AH_BET_ID:
-                    continue
-
-                for value in bet.get("values", []):
-                    rows.append(
-                        {
-                            "bookmaker_id": bookmaker_id,
-                            "bookmaker": bookmaker_name,
-                            "value": str(value.get("value", "")),
-                            "odd": str(value.get("odd", "")),
-                        }
-                    )
-
-    provider_update_utc = max(provider_updates) if provider_updates else None
-
-    return rows, {
-        "fetched_at_utc": fetched_at,
-        "provider_update_utc": provider_update_utc,
-        "fingerprint": odds_fingerprint(rows) if rows else None,
-    }
+    return odds_provider.fetch_ah(fixture_id)
 
 
 def register_odds_observation(fixture_id, odds, meta):
@@ -431,14 +374,13 @@ def register_odds_observation(fixture_id, odds, meta):
     first_seen_utc = previous.get("first_seen_utc") or now_iso
     last_change_utc = previous.get("last_change_utc")
 
-    # The first payload establishes the baseline; it is not considered
-    # a post-lineup market change by itself.
     if previous_fingerprint is None and fingerprint:
         last_change_utc = now_iso
     elif changed:
         last_change_utc = now_iso
 
     record = {
+        "provider": meta.get("provider") or odds_provider.name,
         "fingerprint": fingerprint,
         "first_seen_utc": first_seen_utc,
         "last_seen_utc": now_iso,
@@ -464,21 +406,18 @@ def freshness_after_signal(fixture_id, signal_time, observation):
     first_seen_dt = parse_dt(observation.get("first_seen_utc"))
     last_change_dt = parse_dt(observation.get("last_change_utc"))
     provider_update_dt = parse_dt(observation.get("provider_update_utc"))
+    provider_name = observation.get("provider") or odds_provider.name
 
-    # We need a baseline that existed before the lineup signal. Otherwise
-    # we cannot prove that the post-lineup quote is newer than the baseline.
     if first_seen_dt is None or first_seen_dt >= signal_dt:
         return False, "No pre-lineup odds baseline observed"
 
-    # Strongest proof if the provider explicitly timestamps the quote.
     if provider_update_dt is not None and provider_update_dt > signal_dt:
-        return True, "Provider update timestamp is after lineup signal"
+        return True, f"{provider_name} update timestamp is after lineup signal"
 
-    # Fallback: exact API payload fingerprint changed after the signal.
     if last_change_dt is not None and last_change_dt > signal_dt:
-        return True, "Odds payload changed after lineup signal"
+        return True, f"{provider_name} odds payload changed after lineup signal"
 
-    return False, "API-Football odds payload has not changed since lineup signal"
+    return False, f"{provider_name} odds payload has not changed since lineup signal"
 
 
 # =========================================================
@@ -526,6 +465,7 @@ SNAPSHOT_FIELDS = [
     "shock_diff",
     "signal",
     "data_quality",
+    "odds_provider",
     "provider_update_utc",
     "odds_fingerprint",
     "odds_changed_this_poll",
@@ -568,6 +508,7 @@ def save_snapshot(fixture, odds, observation):
                 "shock_diff": shock_diff,
                 "signal": signal,
                 "data_quality": data_quality,
+                "odds_provider": observation.get("provider") or odds_provider.name,
                 "provider_update_utc": observation.get("provider_update_utc") or "",
                 "odds_fingerprint": observation.get("fingerprint") or "",
                 "odds_changed_this_poll": int(
@@ -683,10 +624,6 @@ SIGNAL_FIELDS = [
     "bookmakers_on_entry_line",
 ]
 
-
-# =========================================================
-# STORE SIGNAL
-# =========================================================
 
 def store_signal_result(fixture, result):
     fixture_id = fixture["fixture_id"]
@@ -900,6 +837,7 @@ def process_fixture(fixture):
         odds, meta = get_ah_odds(fixture_id)
         fixture["last_odds_check"] = now.isoformat()
 
+        print("AH provider:", meta.get("provider") or odds_provider.name)
         print("AH rows:", len(odds))
 
         if odds:
@@ -975,6 +913,7 @@ print("============================================================")
 print("League: EPL")
 print("Season:", SEASON)
 print("AH Bet ID:", AH_BET_ID)
+print("Odds provider:", odds_provider.name)
 print("Lineup Shock threshold:", SHOCK_THRESHOLD)
 print("Historical engine:", "READY")
 print("Freshness guard:", "ENABLED")
