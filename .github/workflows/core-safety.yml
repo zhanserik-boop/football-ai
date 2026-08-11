@@ -59,3 +59,6 @@ jobs:
 
       - name: Build formation context database
         run: python formation_context_builder.py
+
+      - name: Build matchup style / relevant H2H context
+        run: python matchup_context_builder.py
