@@ -54,25 +54,34 @@ the one-shot command by hand:
 python .\v4_matchday_watch.py
 ```
 
-It refreshes at approximately T-40, T-30, T-20, T-10 and T-5 for fixtures whose
-XI is still unavailable. It stops when no pre-match fixture is waiting, after
+It refreshes at approximately T-60, T-45, T-30, T-20, T-10 and T-5 for fixtures
+whose XI is still unavailable. It stops when no pre-match fixture is waiting, after
 the final checkpoint, or at the configured `--max-hours` limit. This avoids
 continuous polling while covering API-Football's usual publication window.
 
 Each watcher cycle also runs `v4_lineup_source_router.py`. The router uses the
-public JSON feed behind UEFA's match centre for Champions League, Europa League
-and Conference League fixtures, matches the fixture by teams and kickoff, and
-compares the official starters with API-Football. It writes:
+public JSON feed behind ESPN's soccer scoreboard, matches the fixture by teams
+and kickoff, rejects any event that is no longer pre-match, and compares the
+published starters with API-Football. It writes:
 
 - `v4_lineup_source_audit.csv`
 - `v4_lineup_source_audit.json`
 
-The statuses are `UEFA_ONLY_RESEARCH`, `API_FOOTBALL_ONLY`,
-`VERIFIED_TWO_SOURCES`, `SOURCE_CONFLICT`, or `WAITING`. UEFA-only data remains
+The statuses are `ESPN_ONLY_RESEARCH`, `API_FOOTBALL_ONLY`,
+`VERIFIED_TWO_SOURCES`, `SOURCE_CONFLICT`, or `WAITING`. ESPN-only data remains
 research evidence: it cannot clear the lineup-value veto or enter Value Gate.
-A source conflict is fail-closed. The UEFA feed is public but undocumented and
+A source conflict is fail-closed. The ESPN feed is public but undocumented and
 has no SLA, so it is isolated behind this adapter and cached rather than treated
-as a production dependency.
+as a production dependency. The previous UEFA fallback was removed because its
+public match feed was not reliably reachable in the target environment.
+
+After the source audit, the watcher automatically runs
+`v4_lineup_shock_research.py`. When API-Football is still empty but ESPN has
+exactly 11 published starters for both teams, the research script maps those
+players to the API-Football player profiles by normalized name. That result is
+labelled `ESPN_RESEARCH`, remains `approved_for_value_gate: false`, and cannot
+change the base V4 `WATCH`/`PASS` decision. A missing player, stale audit, live
+fixture, incomplete XI, unsafe fixture match, or provider conflict fails closed.
 
 ## Safety and timing
 
