@@ -1,0 +1,45 @@
+{
+  "model_name": "BTTS CORE 2026",
+  "purpose": "EPL 2026/27 live shadow forward test",
+  "created_utc": "2026-08-10T06:41:57.850643+00:00",
+  "training_file": "master_features_4seasons.csv",
+  "training_rows": 1520,
+  "training_seasons": [
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "model_type": "StandardScaler + LogisticRegression",
+  "logistic_C": 0.2,
+  "features": [
+    "expected_home_xg",
+    "expected_away_xg",
+    "home_xgf10",
+    "home_xga10",
+    "away_xgf10",
+    "away_xga10",
+    "home_xgf5",
+    "home_xga5",
+    "away_xgf5",
+    "away_xga5",
+    "home_venue_xgf",
+    "home_venue_xga",
+    "away_venue_xgf",
+    "away_venue_xga",
+    "home_sot10",
+    "away_sot10",
+    "expected_total_xg",
+    "expected_xg_balance"
+  ],
+  "frozen_rule": {
+    "market": "BTTS YES",
+    "model_probability_min_inclusive": 0.6,
+    "model_probability_max_exclusive": 0.65,
+    "minimum_edge": 0.03,
+    "edge_definition": "model_yes - fair_market_yes",
+    "market_probability_definition": "(1/YES_odds) / ((1/YES_odds) + (1/NO_odds))"
+  },
+  "status": "SHADOW ONLY",
+  "rule_changes_after_forward_test_starts": "NOT ALLOWED"
+}

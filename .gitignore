@@ -1,0 +1,52 @@
+﻿# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+
+# Logs
+*.log
+
+# Old / archived project files
+archive/
+backup/
+portable_top4/
+*.bak
+
+# Runtime state
+telegram_alert_state.json
+market_monitor_v2_state.json
+squad_transfer_update_state.json
+
+# Automatically regenerated current-season data
+current_squads_2026.csv
+transfers_2026.csv
+
+# Live generated outputs
+market_snapshots_v2.csv
+live_lineups_v2.csv
+lineup_signals_live.csv
+ah_agent_v2_latest.csv
+ah_agent_v2_history.csv
+master_decisions_live.csv
+master_decisions_history.csv
+fixture_results_live.csv
+post_lineup_clv_report.csv
+post_lineup_bets_report.csv
+
+# BTTS live generated outputs
+btts_live_fixtures.csv
+btts_live_features.csv
+btts_live_predictions.csv
+btts_live_watch.csv
+btts_odds_cache.json
