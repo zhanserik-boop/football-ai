@@ -8,6 +8,7 @@ SHADOW_VALUE_GATE = "shadow_value_gate_v1.py"
 SHADOW_OUTCOME_REPORT = "shadow_value_gate_outcome_report.py"
 SHADOW_NOTIFIER = "shadow_value_gate_notifier.py"
 HEALTH_WATCHDOG = "system_health_watchdog.py"
+READINESS_REPORT = "v3_readiness_report.py"
 
 _original_run_script = base.run_script
 
@@ -45,6 +46,7 @@ def main():
             SHADOW_OUTCOME_REPORT,
             SHADOW_NOTIFIER,
             HEALTH_WATCHDOG,
+            READINESS_REPORT,
         )
         if not os.path.exists(path)
     ]
@@ -52,6 +54,7 @@ def main():
         raise SystemExit("Missing V3 live files: " + ", ".join(missing))
 
     base.run_script = run_script_with_v3_context
+    _original_run_script(READINESS_REPORT)
     print("V3 orchestration: Value Gate + Outcome Audit + Telegram + Health enabled")
     base.main()
 
