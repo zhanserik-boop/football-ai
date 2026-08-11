@@ -32,10 +32,13 @@ def combine(lineup_df, direction_df):
     right = right[keep].drop_duplicates(keys, keep="last")
     out = left.merge(right, on=keys, how="left", validate="one_to_one")
 
+    # Football-Data AHh/AHCh store the home handicap. A stronger home side
+    # moves from e.g. -0.50 to -0.75, so close-open is NEGATIVE. A stronger
+    # away side makes the home handicap more positive.
     out["direction_side"] = np.where(
-        pd.to_numeric(out["direction_score"], errors="coerce") > 0,
+        pd.to_numeric(out["direction_score"], errors="coerce") < 0,
         "HOME",
-        np.where(pd.to_numeric(out["direction_score"], errors="coerce") < 0, "AWAY", ""),
+        np.where(pd.to_numeric(out["direction_score"], errors="coerce") > 0, "AWAY", ""),
     )
     out["direction_agrees"] = (
         out["signal"].isin(["HOME", "AWAY"])
@@ -43,8 +46,8 @@ def combine(lineup_df, direction_df):
     ).astype(int)
     move = pd.to_numeric(out["close_move_home"], errors="coerce")
     out["signed_close_move_for_lineup"] = np.where(
-        out["signal"] == "HOME", move,
-        np.where(out["signal"] == "AWAY", -move, np.nan),
+        out["signal"] == "HOME", -move,
+        np.where(out["signal"] == "AWAY", move, np.nan),
     )
     out["large_move"] = (move.abs() >= MOVE_THRESHOLD).astype(int)
     out["shadow_only"] = 1
