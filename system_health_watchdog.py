@@ -293,9 +293,20 @@ def notification_event(rows, notify_state):
 def history_change(rows, previous):
     if not previous:
         return rows
-    previous_overall = previous[-1].get("overall_status")
-    previous_codes = sorted(row.get("code") for row in previous if row.get("code") != "SYSTEM_OK")
-    current_codes = sorted(row.get("code") for row in rows if row.get("code") != "SYSTEM_OK")
+    last_checked = clean(previous[-1].get("checked_utc"))
+    last_rows = [
+        row for row in previous
+        if clean(row.get("checked_utc")) == last_checked
+    ]
+    previous_overall = last_rows[0].get("overall_status") if last_rows else ""
+    previous_codes = sorted(
+        f"{row.get('severity')}:{row.get('code')}:{row.get('fixture_id')}"
+        for row in last_rows if row.get("code") != "SYSTEM_OK"
+    )
+    current_codes = sorted(
+        f"{row.get('severity')}:{row.get('code')}:{row.get('fixture_id')}"
+        for row in rows if row.get("code") != "SYSTEM_OK"
+    )
     if previous_overall != rows[0]["overall_status"] or previous_codes != current_codes:
         return rows
     return []
