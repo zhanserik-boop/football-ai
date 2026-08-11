@@ -82,6 +82,11 @@ class V3DailyDigestTests(unittest.TestCase):
                 "live": {"eligible_total": 31},
                 "drift": {"side_psi": 0.02, "shock_band_psi": 0.03},
             })
+            write_json(root / mod.FREEZE_FILE, {
+                "status": "FROZEN",
+                "files_verified": 24,
+                "files_expected": 24,
+            })
             _, _, tz = mod.schedule_config({})
             metrics = mod.build_metrics(root, NOW, tz)
             self.assertEqual(metrics["readiness"], "READY")
@@ -89,6 +94,8 @@ class V3DailyDigestTests(unittest.TestCase):
             self.assertEqual(metrics["with_clv"], 3)
             self.assertEqual(metrics["drift_status"], "STABLE")
             self.assertEqual(metrics["drift_live_n"], 31)
+            self.assertEqual(metrics["freeze_status"], "FROZEN")
+            self.assertEqual(metrics["freeze_files_verified"], 24)
 
     def test_nearest_fixture_is_shown(self):
         with TemporaryDirectory() as directory:
