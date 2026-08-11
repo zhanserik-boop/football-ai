@@ -14,6 +14,21 @@ MOVE_THRESHOLD = 0.25
 CONFIDENCE_QUANTILE = 0.75
 
 
+def strengthening_side_from_home_handicap_move(value):
+    """Map Football-Data home-handicap movement to the strengthened side.
+
+    Home strengthening makes AHh/AHCh more negative (for example -0.50 to
+    -0.75). Away strengthening makes the home handicap more positive.
+    """
+    try:
+        move = float(value)
+    except (TypeError, ValueError):
+        return "FLAT"
+    if not np.isfinite(move) or move == 0:
+        return "FLAT"
+    return "HOME_STRENGTHEN" if move < 0 else "AWAY_STRENGTHEN"
+
+
 def _fit_direction_ridge(train, features=FEATURES, alpha=RIDGE_ALPHA):
     x = train[features].copy()
     move = pd.to_numeric(train["close_move_home"], errors="coerce")
@@ -65,7 +80,7 @@ def walk_forward(df):
         cutoff = float(np.quantile(np.abs(train_scores), CONFIDENCE_QUANTILE))
         pred = _predict(model, test)
         d.loc[test.index, "direction_score"] = pred
-        d.loc[test.index, "direction_signal"] = np.where(pred > 0, "HOME_STRENGTHEN", np.where(pred < 0, "AWAY_STRENGTHEN", "FLAT"))
+        d.loc[test.index, "direction_signal"] = np.where(pred < 0, "HOME_STRENGTHEN", np.where(pred > 0, "AWAY_STRENGTHEN", "FLAT"))
         d.loc[test.index, "confidence_cutoff"] = cutoff
         d.loc[test.index, "high_confidence"] = (np.abs(pred) >= cutoff).astype(int)
         d.loc[test.index, "model_train_rows_direction"] = len(train)
