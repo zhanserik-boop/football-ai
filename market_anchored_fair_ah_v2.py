@@ -43,6 +43,17 @@ def load_enriched():
     return d
 
 
+def _predict_writable(model, frame, features):
+    x = np.array(frame[features].to_numpy(dtype=float), dtype=float, copy=True)
+    med = model["median"]
+    for j in range(x.shape[1]):
+        bad = ~np.isfinite(x[:, j])
+        x[bad, j] = med[j]
+    z = (x - model["mean"]) / model["std"]
+    design = np.column_stack([np.ones(len(z)), z])
+    return design @ model["beta"]
+
+
 def walk_forward_features(df, features):
     d = df.copy()
     pred_col = "predicted_close_move_home_v2"
@@ -59,7 +70,7 @@ def walk_forward_features(df, features):
         if len(train) < v1.MIN_TRAIN_ROWS or test.empty:
             continue
         model = v1._fit_ridge(train, features=features)
-        pred = v1._predict(model, test, features=features)
+        pred = _predict_writable(model, test, features)
         d.loc[test.index, pred_col] = pred
         d.loc[test.index, fair_col] = pd.to_numeric(test["open_ah_home_line"], errors="coerce").to_numpy(dtype=float) + pred
         d.loc[test.index, "model_train_rows_v2"] = len(train)
@@ -76,16 +87,11 @@ def _metrics(df, pred_col):
     model_mae = float(np.abs(actual - pred).mean()) if len(x) else np.nan
     moved = x[np.abs(actual) >= 0.25]
     direction = float((np.sign(pd.to_numeric(moved[pred_col], errors="coerce")) == np.sign(pd.to_numeric(moved["close_move_home"], errors="coerce"))).mean()) if len(moved) else np.nan
-    return {
-        "rows": len(x), "baseline_mae": baseline_mae, "model_mae": model_mae,
-        "mae_improvement_vs_open": baseline_mae - model_mae if len(x) else np.nan,
-        "large_move_rows": len(moved), "large_move_direction_hit": direction,
-    }
+    return {"rows": len(x), "baseline_mae": baseline_mae, "model_mae": model_mae, "mae_improvement_vs_open": baseline_mae - model_mae if len(x) else np.nan, "large_move_rows": len(moved), "large_move_direction_hit": direction}
 
 
 def build():
     d = load_enriched()
-    # V1 is recalculated on the exact same enriched frame/splits for a fair incremental comparison.
     v1_out = v1.walk_forward(d)
     out = walk_forward_features(v1_out, FEATURES_V2)
     m1 = _metrics(out, "predicted_close_move_home")
@@ -98,7 +104,6 @@ def build():
     out["shadow_only"] = 1
     out.to_csv(OUTPUT_FILE, index=False, encoding="utf-8-sig")
     summary.to_csv(SUMMARY_FILE, index=False, encoding="utf-8-sig")
-
     print("Market-Anchored Fair AH V2 — incremental enriched-context test")
     print("Walk-forward rows:", m2["rows"])
     print("Opening baseline MAE:", f"{m2['baseline_mae']:.4f}")
