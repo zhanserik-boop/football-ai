@@ -77,11 +77,18 @@ class V3DailyDigestTests(unittest.TestCase):
                 "funnel": {"with_clv": 3, "settled": 2},
                 "evidence": {"avg_line_clv": 0.1, "roi": 0.05},
             })
+            write_json(root / mod.DRIFT_FILE, {
+                "status": "STABLE",
+                "live": {"eligible_total": 31},
+                "drift": {"side_psi": 0.02, "shock_band_psi": 0.03},
+            })
             _, _, tz = mod.schedule_config({})
             metrics = mod.build_metrics(root, NOW, tz)
             self.assertEqual(metrics["readiness"], "READY")
             self.assertEqual(metrics["backup_mirror"], "SYNCED")
             self.assertEqual(metrics["with_clv"], 3)
+            self.assertEqual(metrics["drift_status"], "STABLE")
+            self.assertEqual(metrics["drift_live_n"], 31)
 
     def test_nearest_fixture_is_shown(self):
         with TemporaryDirectory() as directory:
