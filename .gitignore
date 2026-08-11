@@ -92,6 +92,8 @@ v3_shadow_risk_summary.json
 v3_runtime_checkpoint_status.json
 runtime_checkpoints/
 runtime_restore_*/
+v3_backup_guard_status.json
+v3_backup_guard_notify_state.json
 
 # BTTS live generated outputs
 btts_live_fixtures.csv
