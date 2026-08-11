@@ -1,0 +1,52 @@
+name: Football AI Core Safety
+
+on:
+  push:
+    branches: [main, "v3-*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  core-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pandas
+
+      - name: Compile tracked Python source
+        run: |
+          python - <<'PY'
+          import pathlib
+          import py_compile
+
+          failures = []
+          for path in pathlib.Path('.').rglob('*.py'):
+              if any(part in {'.git', 'archive', '__pycache__'} for part in path.parts):
+                  continue
+              try:
+                  py_compile.compile(str(path), doraise=True)
+              except Exception as exc:
+                  failures.append((str(path), repr(exc)))
+
+          if failures:
+              for path, exc in failures:
+                  print(f"COMPILE FAIL: {path}: {exc}")
+              raise SystemExit(1)
+
+          print("Tracked Python compile: PASS")
+          PY
+
+      - name: Run frozen core invariant tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
