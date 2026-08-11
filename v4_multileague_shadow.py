@@ -866,6 +866,14 @@ def post_lineup_market_evidence(state_row, market, now):
     return False
 
 
+def pre_match_status(fixture, now):
+    kickoff = parse_dt((fixture or {}).get("kickoff_utc"))
+    minutes = (kickoff - now).total_seconds() / 60.0 if kickoff else None
+    status = clean((fixture or {}).get("status")).upper()
+    eligible = minutes is not None and minutes > 0 and status in {"NS", "TBD"}
+    return eligible, minutes
+
+
 def collect_and_analyze(targets, client, timezone_name, state, now=None):
     now = now or utc_now()
     target_dates = sorted({row["date_local"] for row in targets})
@@ -927,7 +935,7 @@ def collect_and_analyze(targets, client, timezone_name, state, now=None):
 
     team_ids = {}
     for _, fixture, _ in matched:
-        if fixture:
+        if fixture and pre_match_status(fixture, now)[0]:
             team_ids[fixture["home_team_id"]] = fixture["home_team"]
             team_ids[fixture["away_team_id"]] = fixture["away_team"]
 
@@ -964,9 +972,34 @@ def collect_and_analyze(targets, client, timezone_name, state, now=None):
             })
             continue
 
+        pre_match, minutes_to_kickoff = pre_match_status(fixture, now)
         kickoff = parse_dt(fixture["kickoff_utc"])
-        minutes_to_kickoff = (kickoff - now).total_seconds() / 60.0 if kickoff else None
         fixture_id = fixture["fixture_id"]
+        if not pre_match:
+            quality = {
+                "grade": "LOW", "codes": ["NOT_PREMATCH"],
+                "reason": "NOT_PREMATCH",
+            }
+            output.append({
+                "target": target,
+                "fixture": {
+                    **fixture,
+                    "minutes_to_kickoff": (
+                        None if minutes_to_kickoff is None
+                        else round(minutes_to_kickoff, 1)
+                    ),
+                },
+                "match_score": round(match_score, 3),
+                "analysis_status": "EXCLUDED_NOT_PREMATCH",
+                "agents": {"data_quality": quality},
+                "moderator": {
+                    "decision": "PASS", "side": "", "confidence": 0.0,
+                    "reason": "Fixture is no longer pre-match; analysis skipped before per-match API calls",
+                },
+                "shadow_only": True,
+            })
+            continue
+
         prior_state = state.setdefault("fixtures", {}).setdefault(fixture_id, {})
 
         odds_ttl = 5 if minutes_to_kickoff is not None and minutes_to_kickoff <= 120 else 30
@@ -1042,11 +1075,6 @@ def collect_and_analyze(targets, client, timezone_name, state, now=None):
             local_errors.append(odds_meta["error"])
         if should_query_lineup and lineup_meta.get("error"):
             local_errors.append(lineup_meta["error"])
-        pre_match = (
-            minutes_to_kickoff is not None
-            and minutes_to_kickoff > 0
-            and fixture.get("status", "").upper() in {"NS", "TBD"}
-        )
         quality = data_quality_agent(
             fixture, home, away, market, lineup, local_errors, post_lineup,
             pre_match=pre_match,
@@ -1067,6 +1095,7 @@ def collect_and_analyze(targets, client, timezone_name, state, now=None):
             },
             "post_lineup_market_evidence": post_lineup,
             "market_audit": market_audit,
+            "analysis_status": "ANALYZED_PREMATCH",
             "moderator": moderator,
             "shadow_only": True,
         })
@@ -1075,7 +1104,7 @@ def collect_and_analyze(targets, client, timezone_name, state, now=None):
 
 CSV_FIELDS = [
     "generated_utc", "fixture_id", "kickoff_utc", "competition", "round",
-    "home_team", "away_team", "minutes_to_kickoff", "data_quality",
+    "home_team", "away_team", "minutes_to_kickoff", "analysis_status", "data_quality",
     "quant_side", "quant_fair_home_ah", "quant_confidence",
     "market_home_ah", "market_bookmakers", "market_freshness",
     "lineup_status", "matchup_side", "underdog_resistance",
@@ -1101,6 +1130,7 @@ def flatten_result(result, generated_utc):
         "home_team": fixture.get("home_team") or (result.get("target") or {}).get("home_team", ""),
         "away_team": fixture.get("away_team") or (result.get("target") or {}).get("away_team", ""),
         "minutes_to_kickoff": fixture.get("minutes_to_kickoff", ""),
+        "analysis_status": result.get("analysis_status", "FIXTURE_NOT_FOUND"),
         "data_quality": (agents.get("data_quality") or {}).get("grade", "LOW"),
         "quant_side": quant.get("side", ""),
         "quant_fair_home_ah": quant.get("fair_home_ah", ""),

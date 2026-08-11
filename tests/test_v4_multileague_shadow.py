@@ -46,10 +46,12 @@ class FakeClient:
         self.api_requests = 0
         self.remaining = "50"
         self.errors = []
+        self.calls = []
 
     def get(self, endpoint, params=None, ttl_minutes=0, allow_stale=False):
         self.api_requests += 1
         params = params or {}
+        self.calls.append((endpoint, dict(params)))
         if endpoint == "/fixtures" and "date" in params:
             payload = {"response": [{
                 "fixture": {
@@ -105,6 +107,18 @@ class FakeClient:
         else:
             payload = {"response": []}
         return payload, {"source": "TEST", "fetched_utc": NOW.isoformat(), "age_minutes": 0.0}
+
+
+class LiveFakeClient(FakeClient):
+    def get(self, endpoint, params=None, ttl_minutes=0, allow_stale=False):
+        payload, meta = super().get(endpoint, params, ttl_minutes, allow_stale)
+        params = params or {}
+        if endpoint == "/fixtures" and "date" in params and payload.get("response"):
+            payload["response"][0]["fixture"]["date"] = (
+                NOW - timedelta(minutes=10)
+            ).isoformat()
+            payload["response"][0]["fixture"]["status"]["short"] = "1H"
+        return payload, meta
 
 
 class V4MultiLeagueTests(unittest.TestCase):
@@ -293,6 +307,33 @@ class V4MultiLeagueTests(unittest.TestCase):
         )
         self.assertEqual(quality["grade"], "LOW")
         self.assertIn("NOT_PREMATCH", quality["codes"])
+
+    def test_live_fixture_is_excluded_before_per_match_api_calls(self):
+        target = {
+            "date_local": "2026-08-11",
+            "kickoff_local": "20:00",
+            "competition": "UEFA Champions League Qualification",
+            "home_team": "Kairat Almaty",
+            "away_team": "Levski Sofia",
+        }
+        client = LiveFakeClient()
+        results = v4.collect_and_analyze(
+            [target], client, "Asia/Almaty",
+            {"schema_version": 1, "fixtures": {}}, now=NOW,
+        )
+        self.assertEqual(results[0]["analysis_status"], "EXCLUDED_NOT_PREMATCH")
+        self.assertEqual(results[0]["moderator"]["decision"], "PASS")
+        self.assertEqual(
+            results[0]["agents"]["data_quality"]["codes"], ["NOT_PREMATCH"]
+        )
+        self.assertFalse(any(endpoint == "/odds" for endpoint, _ in client.calls))
+        self.assertFalse(any(
+            endpoint == "/fixtures" and "team" in params
+            for endpoint, params in client.calls
+        ))
+        self.assertFalse(any(
+            endpoint == "/fixtures/lineups" for endpoint, _ in client.calls
+        ))
 
     def test_previous_meeting_is_oriented_to_current_home_team(self):
         first_leg = completed_fixture(
