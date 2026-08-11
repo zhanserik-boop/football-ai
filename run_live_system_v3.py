@@ -1,6 +1,7 @@
 import os
 
 import run_live_system as base
+import v3_external_supervisor as external_supervisor
 
 LIVE_COACH_CONTEXT = "live_coach_context.py"
 MARKET_TIMELINE = "market_timeline_engine.py"
@@ -13,6 +14,7 @@ FORWARD_TEST_SCORECARD = "v3_forward_test_scorecard.py"
 SHADOW_RISK_ENGINE = "v3_shadow_risk_engine.py"
 RUNTIME_CHECKPOINT = "v3_runtime_checkpoint.py"
 BACKUP_GUARD = "v3_backup_guard.py"
+EXTERNAL_SUPERVISOR = "v3_external_supervisor.py"
 
 _original_run_script = base.run_script
 
@@ -59,6 +61,7 @@ def main():
             SHADOW_RISK_ENGINE,
             RUNTIME_CHECKPOINT,
             BACKUP_GUARD,
+            EXTERNAL_SUPERVISOR,
         )
         if not os.path.exists(path)
     ]
@@ -67,8 +70,16 @@ def main():
 
     base.run_script = run_script_with_v3_context
     _original_run_script(READINESS_REPORT)
-    print("V3 orchestration: Value Gate + Outcome Audit + Scorecard + Risk + Checkpoint + Backup Guard + Telegram + Health enabled")
-    base.main()
+    print("V3 orchestration: Value Gate + Outcome Audit + Scorecard + Risk + Checkpoint + Backup Guard + External Supervisor + Telegram + Health enabled")
+    external_supervisor.set_expected_running(True, reason="V3_START")
+    try:
+        base.main()
+    except BaseException:
+        # Keep expectation armed on a crash so the independent scheduled task
+        # can alert. A normal CTRL+C is handled inside base.main and returns.
+        raise
+    else:
+        external_supervisor.set_expected_running(False, reason="CLEAN_STOP")
 
 
 if __name__ == "__main__":
