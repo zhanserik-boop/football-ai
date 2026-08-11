@@ -77,6 +77,8 @@ live_coach_observations.csv
 coach_context_live.csv
 shadow_value_gate_live.csv
 shadow_value_gate_history.csv
+shadow_value_gate_outcomes.csv
+shadow_value_gate_outcome_summary.csv
 
 # BTTS live generated outputs
 btts_live_fixtures.csv
