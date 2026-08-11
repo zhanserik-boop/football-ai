@@ -97,7 +97,9 @@ def load_odds_season(season, filename):
     if "Date" not in raw.columns or "HomeTeam" not in raw.columns or "AwayTeam" not in raw.columns:
         raise ValueError(f"{filename}: required Date/HomeTeam/AwayTeam columns missing")
 
-    out = pd.DataFrame()
+    # Establish the row index from the source first. Assigning a scalar season
+    # to an empty DataFrame would otherwise leave the new rows with NaN season.
+    out = pd.DataFrame(index=raw.index)
     out["season"] = int(season)
     out["date"] = parse_football_data_date(raw["Date"])
 
