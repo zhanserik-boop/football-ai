@@ -770,16 +770,24 @@ def data_quality_agent(
 def moderator_agent(quant, market, lineup, matchup, underdog, draw, context, quality, post_lineup_market):
     if quality["grade"] == "LOW":
         return {"decision": "PASS", "side": "", "confidence": 0.0, "reason": "Data Quality veto: " + quality["reason"]}
-    side = quant["side"]
-    if side not in {"HOME", "AWAY"}:
-        return {"decision": "PASS", "side": "", "confidence": quant["confidence"], "reason": "Quant has no directional edge"}
     if market.get("status") != "OK":
-        return {"decision": "PASS", "side": side, "confidence": quant["confidence"], "reason": "No tradeable Asian Handicap market"}
+        return {"decision": "PASS", "side": "", "confidence": quant["confidence"], "reason": "No tradeable Asian Handicap market"}
 
     fair = quant["fair_home_ah"]
     current = market["current_home_handicap"]
     home_value = current - fair
-    line_value = home_value if side == "HOME" else -home_value
+    if home_value >= 0.25:
+        side = "HOME"
+        line_value = home_value
+    elif home_value <= -0.25:
+        side = "AWAY"
+        line_value = -home_value
+    else:
+        return {
+            "decision": "PASS", "side": "", "confidence": quant["confidence"],
+            "line_value": round(abs(home_value), 3), "conflicts": [],
+            "reason": f"No material fair-v-market AH edge ({home_value:+.2f} home)",
+        }
     directional_move = market.get("home_line_move", 0.0)
     directional_move = directional_move if side == "HOME" else -directional_move
     conflicts = []
@@ -822,7 +830,10 @@ def moderator_agent(quant, market, lineup, matchup, underdog, draw, context, qua
 
     return {
         "decision": decision, "side": side, "confidence": confidence,
-        "line_value": round(line_value, 3), "conflicts": conflicts, "reason": reason,
+        "line_value": round(line_value, 3),
+        "home_value": round(home_value, 3),
+        "quant_strength_side": quant.get("side", "NEUTRAL"),
+        "conflicts": conflicts, "reason": reason,
     }
 
 
