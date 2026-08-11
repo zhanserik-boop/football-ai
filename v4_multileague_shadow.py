@@ -30,6 +30,7 @@ DEFAULT_CACHE_DIR = "v4_cache"
 DEFAULT_STATE = "v4_multileague_state.json"
 DEFAULT_CSV = "v4_multileague_predictions.csv"
 DEFAULT_JSON = "v4_multileague_predictions.json"
+DEFAULT_MARKET_AUDIT_JSON = "v4_market_diagnostics.json"
 AH_BET_ID = 4
 MIN_FORM_MATCHES = 5
 MIN_BOOKMAKERS = 2
@@ -437,7 +438,8 @@ def extract_ah_rows(payload):
                 if bet_id != AH_BET_ID:
                     continue
                 for value in bet.get("values", []):
-                    parsed = parse_handicap_value(value.get("value"))
+                    raw_value = clean(value.get("value"))
+                    parsed = parse_handicap_value(raw_value)
                     odd = safe_float(value.get("odd"))
                     if parsed is None or odd is None or odd <= 1.0:
                         continue
@@ -448,6 +450,8 @@ def extract_ah_rows(payload):
                         "side": side,
                         "handicap": handicap,
                         "odd": odd,
+                        "raw_value": raw_value,
+                        "bet_name": clean(bet.get("name")),
                     })
     return rows, max(provider_updates) if provider_updates else ""
 
@@ -507,6 +511,14 @@ def market_consensus(rows):
     away_avg = sum(row["away_odd"] for row in same) / len(same)
     home_imp = 1.0 / home_avg
     away_imp = 1.0 / away_avg
+    line_counts = [
+        {"home_line": line, "bookmakers": count}
+        for line, count in sorted(counts.items())
+    ]
+    selected_lines = sorted(
+        selected,
+        key=lambda row: (row["bookmaker"].casefold(), row["bookmaker_id"]),
+    )
     return {
         "home_handicap": consensus_line,
         "home_avg_odds": round(home_avg, 4),
@@ -516,6 +528,10 @@ def market_consensus(rows):
         "best_home_odds": round(max(row["home_odd"] for row in same), 4),
         "best_away_odds": round(max(row["away_odd"] for row in same), 4),
         "bookmakers_with_main_line": len(selected),
+        "main_line_agreement": round(max_count / len(selected), 4),
+        "main_line_spread": round(max(counts) - min(counts), 3),
+        "line_vote_counts": line_counts,
+        "selected_bookmaker_lines": selected_lines,
         "consensus_version": MARKET_CONSENSUS_VERSION,
     }
 
@@ -949,6 +965,24 @@ def collect_and_analyze(targets, client, timezone_name, state, now=None):
             consensus, provider_update, prior_state, fingerprint,
             odds_meta.get("fetched_utc", ""), now,
         )
+        market_audit = {
+            "fixture_id": fixture_id,
+            "home_team": fixture["home_team"],
+            "away_team": fixture["away_team"],
+            "provider_update_utc": provider_update,
+            "raw_ah_rows": ah_rows,
+            "selected_bookmaker_lines": (
+                (consensus or {}).get("selected_bookmaker_lines", [])
+            ),
+            "line_vote_counts": (consensus or {}).get("line_vote_counts", []),
+            "consensus_home_handicap": (
+                (consensus or {}).get("home_handicap")
+            ),
+            "main_line_agreement": (
+                (consensus or {}).get("main_line_agreement")
+            ),
+            "main_line_spread": (consensus or {}).get("main_line_spread"),
+        }
 
         lineup_payload = {}
         lineup_meta = {}
@@ -1016,6 +1050,7 @@ def collect_and_analyze(targets, client, timezone_name, state, now=None):
                 "draw_pressure": draw, "context": context, "data_quality": quality,
             },
             "post_lineup_market_evidence": post_lineup,
+            "market_audit": market_audit,
             "moderator": moderator,
             "shadow_only": True,
         })
@@ -1086,6 +1121,21 @@ def write_csv(path, rows):
     os.replace(temporary, path)
 
 
+def build_market_audit_document(results, generated_utc):
+    matches = []
+    for result in results:
+        audit = result.get("market_audit")
+        if audit is not None:
+            matches.append(audit)
+    return {
+        "schema_version": 1,
+        "generated_utc": generated_utc,
+        "purpose": "Raw API-Football Asian Handicap mapping audit",
+        "contains_secrets": False,
+        "matches": matches,
+    }
+
+
 def print_report(results, api_requests, remaining):
     print("\n" + "=" * 88)
     print("FOOTBALL AI V4 — MULTI-LEAGUE SHADOW PREDICTIONS")
@@ -1121,6 +1171,7 @@ def build_parser():
     parser.add_argument("--state", default=DEFAULT_STATE)
     parser.add_argument("--csv", default=DEFAULT_CSV)
     parser.add_argument("--json", default=DEFAULT_JSON)
+    parser.add_argument("--market-audit-json", default=DEFAULT_MARKET_AUDIT_JSON)
     return parser
 
 
@@ -1142,11 +1193,16 @@ def main(argv=None):
         "api_errors": client.errors, "results": results,
     }
     atomic_json(args.json, document)
+    atomic_json(
+        args.market_audit_json,
+        build_market_audit_document(results, generated),
+    )
     write_csv(args.csv, [flatten_result(row, generated) for row in results])
     atomic_json(args.state, state)
     print_report(results, client.api_requests, client.remaining)
     print("CSV:", args.csv)
     print("JSON:", args.json)
+    print("MARKET AUDIT JSON:", args.market_audit_json)
     return 0
 
 
