@@ -49,6 +49,9 @@ For a different slate, copy the CSV and pass `--input`.
 
 ## Safety and timing
 
+- A fixture whose kickoff has passed or whose provider status is no longer
+  `NS`/`TBD` is excluded before team-form, odds, or lineup API calls. It remains
+  visible in the report as `PASS` with `EXCLUDED_NOT_PREMATCH`.
 - Before confirmed lineups, an otherwise valid candidate remains `WATCH`.
 - A `SHADOW BET` requires HIGH data quality, validated numerical lineup values,
   and verified post-lineup market evidence. Until the cross-league player model
