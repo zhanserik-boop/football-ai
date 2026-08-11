@@ -35,6 +35,57 @@ class SchedulePriorityAgentTests(unittest.TestCase):
         )
         self.assertEqual(risk, "LOW")
 
+    def test_early_season_table_pressure_stays_low(self):
+        standings = {
+            49: {"rank": 2, "points": 7, "played": 3, "description": ""}
+        }
+        ctx = spa.standings_pressure(49, standings)
+        self.assertEqual(ctx["label"], "LOW")
+        self.assertLess(ctx["score"], 6)
+
+    def test_late_title_race_increases_epl_importance(self):
+        standings = {
+            49: {"rank": 1, "points": 78, "played": 34, "description": "Champions League"}
+        }
+        table = spa.standings_pressure(49, standings)
+        effective, importance = spa.classify_match_importance(60, table)
+        self.assertGreaterEqual(effective, 75)
+        self.assertIn(importance, {"HIGH", "VERY HIGH"})
+
+    def test_table_importance_can_reduce_rotation_risk_before_champions_league(self):
+        fixture = {
+            "fixture_id": 1,
+            "kickoff": datetime(2027, 4, 24, 14, 0, tzinfo=timezone.utc),
+            "competition": "Premier League",
+            "round": "Regular Season - 34",
+            "home_id": 49,
+            "home_name": "Chelsea",
+            "away_id": 40,
+            "away_name": "Liverpool",
+        }
+        schedule_items = [
+            {
+                "fixture": {"id": 2, "date": "2027-04-27T19:00:00+00:00"},
+                "league": {
+                    "id": 2,
+                    "name": "UEFA Champions League",
+                    "round": "Semi-finals",
+                },
+                "teams": {
+                    "home": {"id": 49, "name": "Chelsea"},
+                    "away": {"id": 541, "name": "Real Madrid"},
+                },
+            }
+        ]
+        standings = {
+            49: {"rank": 1, "points": 78, "played": 33, "description": "Champions League"}
+        }
+        ctx = spa.build_team_context(
+            fixture, 49, "Chelsea", schedule_items, standings
+        )
+        self.assertGreater(ctx["current_effective_priority"], 60)
+        self.assertNotEqual(ctx["rotation_risk"], "HIGH")
+
     def test_agent_is_shadow_context_not_betting_rule(self):
         fixture = {
             "fixture_id": 1,
