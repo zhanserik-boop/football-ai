@@ -24,19 +24,19 @@ class ShadowValueGateResearchTests(unittest.TestCase):
         direction = pd.DataFrame([
             {
                 "season": 2023, "date": "2023-08-01", "home_team": "A", "away_team": "B",
-                "close_move_home": 0.25, "direction_score": 0.4,
+                "close_move_home": -0.25, "direction_score": -0.4,
                 "direction_signal": "HOME_STRENGTHEN", "confidence_cutoff": 0.3,
                 "high_confidence": 1, "model_train_through_season_direction": 2022,
             },
             {
                 "season": 2023, "date": "2023-08-02", "home_team": "C", "away_team": "D",
-                "close_move_home": 0.25, "direction_score": 0.2,
+                "close_move_home": 0.25, "direction_score": -0.2,
                 "direction_signal": "HOME_STRENGTHEN", "confidence_cutoff": 0.3,
                 "high_confidence": 0, "model_train_through_season_direction": 2022,
             },
             {
                 "season": 2023, "date": "2023-08-03", "home_team": "E", "away_team": "F",
-                "close_move_home": 0.50, "direction_score": 0.5,
+                "close_move_home": -0.50, "direction_score": -0.5,
                 "direction_signal": "HOME_STRENGTHEN", "confidence_cutoff": 0.3,
                 "high_confidence": 1, "model_train_through_season_direction": 2022,
             },
@@ -49,7 +49,7 @@ class ShadowValueGateResearchTests(unittest.TestCase):
         self.assertEqual(out.loc[0, "direction_agrees"], 1)
         self.assertEqual(out.loc[1, "direction_agrees"], 0)
         self.assertAlmostEqual(out.loc[0, "signed_close_move_for_lineup"], 0.25)
-        self.assertAlmostEqual(out.loc[1, "signed_close_move_for_lineup"], -0.25)
+        self.assertAlmostEqual(out.loc[1, "signed_close_move_for_lineup"], 0.25)
 
     def test_low_quality_lineup_is_excluded(self):
         lineup, direction = self._frames()
