@@ -62,3 +62,6 @@ jobs:
 
       - name: Build matchup style / relevant H2H context
         run: python matchup_context_builder.py
+
+      - name: Build market-anchored fair AH research
+        run: python market_anchored_fair_ah.py
