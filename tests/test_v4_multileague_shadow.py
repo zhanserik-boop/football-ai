@@ -115,6 +115,28 @@ class V4MultiLeagueTests(unittest.TestCase):
     def test_split_handicap_is_averaged(self):
         self.assertEqual(v4.parse_handicap_value("Home -0.5, -1.0"), ("HOME", -0.75))
 
+    def test_ah_extraction_preserves_raw_provider_values_for_audit(self):
+        payload = {"response": [{
+            "update": NOW.isoformat(),
+            "bookmakers": [{
+                "id": 10,
+                "name": "Audit Book",
+                "bets": [{
+                    "id": 4,
+                    "name": "Asian Handicap",
+                    "values": [
+                        {"value": "Home -0.5, -1.0", "odd": "1.91"},
+                        {"value": "Away +0.5, +1.0", "odd": "1.97"},
+                    ],
+                }],
+            }],
+        }]}
+        rows, provider_update = v4.extract_ah_rows(payload)
+        self.assertEqual(provider_update, NOW.isoformat())
+        self.assertEqual(rows[0]["raw_value"], "Home -0.5, -1.0")
+        self.assertEqual(rows[0]["bet_name"], "Asian Handicap")
+        self.assertEqual(rows[0]["handicap"], -0.75)
+
     def test_consensus_requires_paired_sides(self):
         rows = [
             {"bookmaker_id": "1", "bookmaker": "A", "side": "HOME", "handicap": -0.5, "odd": 1.95},
@@ -149,6 +171,13 @@ class V4MultiLeagueTests(unittest.TestCase):
         self.assertEqual(market["home_handicap"], 1.0)
         self.assertEqual(market["bookmakers"], 3)
         self.assertEqual(market["bookmakers_with_main_line"], 3)
+        self.assertEqual(market["main_line_agreement"], 1.0)
+        self.assertEqual(market["main_line_spread"], 0.0)
+        self.assertEqual(len(market["selected_bookmaker_lines"]), 3)
+        self.assertEqual(
+            market["line_vote_counts"],
+            [{"home_line": 1.0, "bookmakers": 3}],
+        )
         self.assertEqual(market["consensus_version"], 2)
 
     def test_new_consensus_version_resets_invalid_opening_baseline(self):
@@ -245,6 +274,17 @@ class V4MultiLeagueTests(unittest.TestCase):
                 saved = list(__import__("csv").DictReader(handle))
             self.assertEqual(saved[0]["decision"], "PASS")
             self.assertEqual(saved[0]["shadow_only"], "YES")
+
+    def test_market_audit_document_contains_no_credentials(self):
+        results = [{
+            "market_audit": {
+                "fixture_id": "1001",
+                "raw_ah_rows": [{"raw_value": "Home -0.25", "odd": 1.95}],
+            },
+        }]
+        document = v4.build_market_audit_document(results, NOW.isoformat())
+        self.assertFalse(document["contains_secrets"])
+        self.assertEqual(document["matches"][0]["fixture_id"], "1001")
 
 
 if __name__ == "__main__":

@@ -31,8 +31,13 @@ Outputs:
 
 - `v4_multileague_predictions.csv`
 - `v4_multileague_predictions.json`
+- `v4_market_diagnostics.json` (raw AH labels, normalized lines, per-book main-line selection)
 - `v4_multileague_state.json`
 - cached API responses under `v4_cache\`
+
+The market diagnostics file contains no API credential or other secret. It is
+intended for validating provider-specific Asian Handicap direction and
+alternative-line mapping before any cross-league market signal is trusted.
 
 The supplied target file contains the 12 matches from the 11 August 2026 image.
 For a different slate, copy the CSV and pass `--input`.
@@ -49,6 +54,9 @@ For a different slate, copy the CSV and pass `--input`.
 - Missing fixture, form, AH, stale evidence, or API failure causes a downgrade or
   a fail-closed `PASS`.
 - No real-betting integration exists.
+- Treat an implausible AH direction or a repeated boundary line such as `+1.5`
+  as an audit failure. Do not promote that match beyond research output until
+  `v4_market_diagnostics.json` has been inspected and the mapping is validated.
 
 The first run stores the opening observed AH. A later run near kickoff can then
 measure movement and establish whether the market updated after confirmed XI.
