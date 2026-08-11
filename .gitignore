@@ -29,6 +29,7 @@ market_monitor_v2_state.json
 squad_transfer_update_state.json
 schedule_priority_cache.json
 historical_coach_builder_state.json
+shadow_value_gate_notify_state.json
 
 # Automatically regenerated current-season data
 current_squads_2026.csv
