@@ -21,6 +21,7 @@ class MarketAnchoredFairAHTests(unittest.TestCase):
                     "home_team": f"H{i%20}", "away_team": f"A{i%20}",
                     "open_ah_home_line": open_line,
                     "close_ah_home_line": open_line + close_move,
+                    "close_move_home": close_move,
                     "market_home_prob": 0.42, "market_draw_prob": drawp, "market_away_prob": 0.33,
                     "matchup_xg_balance_edge_home": xg_edge,
                     "ah_cover_edge_home": ah_edge,
@@ -46,7 +47,9 @@ class MarketAnchoredFairAHTests(unittest.TestCase):
         base = self._frame()
         a = mod.walk_forward(base.copy())
         changed = base.copy()
-        changed.loc[changed["season"] == 2024, "close_ah_home_line"] += 5.0
+        mask = changed["season"] == 2024
+        changed.loc[mask, "close_move_home"] += 5.0
+        changed.loc[mask, "close_ah_home_line"] += 5.0
         b = mod.walk_forward(changed)
         pa = a.loc[a["season"] == 2023, "predicted_close_move_home"].to_numpy()
         pb = b.loc[b["season"] == 2023, "predicted_close_move_home"].to_numpy()
