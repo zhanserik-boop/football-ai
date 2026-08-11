@@ -85,6 +85,8 @@ system_health_live.csv
 system_health_history.csv
 v3_readiness_report.csv
 v3_readiness_summary.json
+v3_forward_test_scorecard.csv
+v3_forward_test_summary.json
 
 # BTTS live generated outputs
 btts_live_fixtures.csv
