@@ -27,6 +27,7 @@ portable_top4/
 telegram_alert_state.json
 market_monitor_v2_state.json
 squad_transfer_update_state.json
+schedule_priority_cache.json
 
 # Automatically regenerated current-season data
 current_squads_2026.csv
@@ -49,6 +50,7 @@ post_lineup_clv_report.csv
 post_lineup_bets_report.csv
 market_timeline_live.csv
 signal_audit_ledger.csv
+schedule_priority_live.csv
 
 # BTTS live generated outputs
 btts_live_fixtures.csv
