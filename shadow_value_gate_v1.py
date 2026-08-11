@@ -8,12 +8,14 @@ AH_FILE = "ah_agent_v2_latest.csv"
 TIMELINE_FILE = "market_timeline_live.csv"
 COACH_FILE = "coach_context_live.csv"
 MATCHUP_FILE = "epl_matchup_context.csv"
+HEALTH_FILE = "system_health_live.csv"
 
 OUTPUT_FILE = "shadow_value_gate_live.csv"
 HISTORY_FILE = "shadow_value_gate_history.csv"
 
 MAX_MARKET_AGE_MINUTES = 12.0
 MIN_BOOKMAKERS = 2
+MAX_HEALTH_REPORT_AGE_MINUTES = 3.0
 
 # Step 19 out-of-sample robustness result. This is a population prior, not a
 # per-fixture probability: HIGH-quality Lineup Shock rows produced positive
@@ -32,6 +34,7 @@ OUTPUT_FIELDS = [
     "market_bookmakers", "entry_handicap", "entry_avg_odds",
     "entry_best_odds", "entry_best_bookmaker", "new_manager_context", "new_manager_score",
     "matchup_context", "matchup_score", "context_score",
+    "health_gate_status", "health_codes", "health_report_age_minutes",
     "gate_decision", "reason", "shadow_only",
 ]
 
@@ -89,6 +92,13 @@ def append_csv(path, fields, rows):
     if not rows:
         return
     exists = os.path.exists(path) and os.path.getsize(path) > 0
+    if exists:
+        with open(path, "r", encoding="utf-8-sig", newline="") as handle:
+            existing_fields = csv.DictReader(handle).fieldnames or []
+        if existing_fields != fields:
+            existing_rows = read_csv_rows(path)
+            write_csv_atomic(path, fields, existing_rows + rows)
+            return
     with open(path, "a", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
         if not exists:
@@ -202,7 +212,59 @@ def matchup_context(rows, home_team, away_team, kickoff, signal):
     return f"NEUTRAL xG-balance edge {signal_edge:+.2f}", 0
 
 
-def decide_gate(ah_row, freshness, band, manager_score, matchup_score):
+def safety_health_gate(rows, fixture_id, now):
+    # None is reserved for isolated unit callers. The live runner always passes
+    # a list; an empty/missing live report therefore fails closed.
+    if rows is None:
+        return "NOT_CHECKED", "", None, False
+    if not rows:
+        return "UNKNOWN", "HEALTH_REPORT_MISSING", None, True
+
+    summary = next(
+        (row for row in rows if clean(row.get("component")).upper() == "SYSTEM"),
+        None,
+    )
+    if summary is None:
+        return "UNKNOWN", "HEALTH_SUMMARY_MISSING", None, True
+
+    checked = parse_dt(summary.get("checked_utc"))
+    age = (now - checked).total_seconds() / 60.0 if checked else None
+    if age is None or age < -1 or age > MAX_HEALTH_REPORT_AGE_MINUTES:
+        return "STALE", "HEALTH_REPORT_STALE", age, True
+
+    issue_rows = [
+        row for row in rows
+        if clean(row.get("component")).upper() != "SYSTEM"
+    ]
+    critical = [
+        row for row in issue_rows
+        if clean(row.get("severity")).upper() == "CRITICAL"
+        and clean(row.get("fixture_id")) in {"", fixture_id}
+    ]
+    if critical:
+        codes = "|".join(sorted({clean(row.get("code")) for row in critical}))
+        scope = "GLOBAL" if any(not clean(row.get("fixture_id")) for row in critical) else "FIXTURE"
+        return f"CRITICAL_{scope}", codes, age, True
+
+    degraded = [
+        row for row in issue_rows
+        if clean(row.get("severity")).upper() == "DEGRADED"
+        and clean(row.get("fixture_id")) in {"", fixture_id}
+    ]
+    if degraded:
+        codes = "|".join(sorted({clean(row.get("code")) for row in degraded}))
+        return "DEGRADED", codes, age, False
+
+    overall = clean(summary.get("overall_status")).upper()
+    if overall == "CRITICAL":
+        return "HEALTHY_FOR_FIXTURE", "OTHER_FIXTURE_CRITICAL", age, False
+    return overall or "HEALTHY", "", age, False
+
+
+def decide_gate(
+    ah_row, freshness, band, manager_score, matchup_score,
+    health_block=False, health_codes="",
+):
     ah_decision = clean(ah_row.get("decision")).upper()
     quality = clean(ah_row.get("data_quality")).upper()
     minutes = safe_float(ah_row.get("minutes_to_kickoff"))
@@ -213,6 +275,8 @@ def decide_gate(ah_row, freshness, band, manager_score, matchup_score):
         return "PASS", f"AH Agent={ah_decision or 'MISSING'}"
     if ah_decision != "BET":
         return "WATCH", f"AH Agent={ah_decision}"
+    if health_block:
+        return "WATCH", f"Safety Kill Switch: {health_codes or 'CRITICAL HEALTH'}"
     if quality != "HIGH":
         return "WATCH", "Only HIGH lineup quality is eligible after Step 19"
     if band == "UNSTABLE_2.0_2.5":
@@ -224,7 +288,10 @@ def decide_gate(ah_row, freshness, band, manager_score, matchup_score):
     return "SHADOW BET", "HIGH Lineup Shock + robust directional prior + fresh tradeable AH"
 
 
-def build_gate_rows(ah_rows, timeline_rows, coach_rows, matchup_rows, now=None):
+def build_gate_rows(
+    ah_rows, timeline_rows, coach_rows, matchup_rows, now=None,
+    health_rows=None,
+):
     now = now or utc_now()
     timelines = latest_timeline_by_fixture(timeline_rows)
     output = []
@@ -246,8 +313,12 @@ def build_gate_rows(ah_rows, timeline_rows, coach_rows, matchup_rows, now=None):
         matchup_text, matchup_score = matchup_context(
             matchup_rows, home, away, kickoff, signal
         )
+        health_status, health_codes, health_age, health_block = safety_health_gate(
+            health_rows, fixture_id, now
+        )
         decision, reason = decide_gate(
-            ah, fresh, band, manager_score, matchup_score
+            ah, fresh, band, manager_score, matchup_score,
+            health_block=health_block, health_codes=health_codes,
         )
 
         output.append({
@@ -280,6 +351,11 @@ def build_gate_rows(ah_rows, timeline_rows, coach_rows, matchup_rows, now=None):
             "matchup_context": matchup_text,
             "matchup_score": matchup_score,
             "context_score": manager_score + matchup_score,
+            "health_gate_status": health_status,
+            "health_codes": health_codes,
+            "health_report_age_minutes": (
+                "" if health_age is None else round(health_age, 3)
+            ),
             "gate_decision": decision,
             "reason": reason,
             "shadow_only": 1,
@@ -289,7 +365,10 @@ def build_gate_rows(ah_rows, timeline_rows, coach_rows, matchup_rows, now=None):
 
 
 def history_changes(current, previous):
-    keys = {"gate_decision", "market_freshness", "ah_decision", "context_score"}
+    keys = {
+        "gate_decision", "market_freshness", "ah_decision", "context_score",
+        "health_gate_status", "health_codes",
+    }
     by_fixture = {}
     for row in previous:
         by_fixture[clean(row.get("fixture_id"))] = row
@@ -309,6 +388,7 @@ def run_once():
         read_csv_rows(COACH_FILE),
         read_csv_rows(MATCHUP_FILE),
         now=now,
+        health_rows=read_csv_rows(HEALTH_FILE),
     )
     write_csv_atomic(OUTPUT_FILE, OUTPUT_FIELDS, current)
     append_csv(

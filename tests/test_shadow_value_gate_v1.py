@@ -1,7 +1,13 @@
 import unittest
+import csv
+import os
+import tempfile
 from datetime import datetime, timedelta, timezone
 
-from shadow_value_gate_v1 import build_gate_rows, market_freshness, shock_band
+from shadow_value_gate_v1 import (
+    append_csv, build_gate_rows, market_freshness, shock_band,
+    safety_health_gate,
+)
 
 
 NOW = datetime(2026, 8, 11, 12, 0, tzinfo=timezone.utc)
@@ -82,6 +88,62 @@ class ShadowValueGateV1Tests(unittest.TestCase):
             market_freshness(timeline(home_bookmakers="1"), "HOME", NOW)[0],
             "THIN",
         )
+
+    def test_missing_live_health_report_fails_closed(self):
+        rows = build_gate_rows(
+            [ah_row()], [timeline()], [], [], now=NOW, health_rows=[]
+        )
+        self.assertEqual(rows[0]["gate_decision"], "WATCH")
+        self.assertEqual(rows[0]["health_codes"], "HEALTH_REPORT_MISSING")
+
+    def test_global_critical_health_blocks_shadow_bet(self):
+        health = [
+            {"checked_utc": NOW.isoformat(), "component": "SYSTEM", "overall_status": "CRITICAL"},
+            {"component": "MARKET_MONITOR", "severity": "CRITICAL",
+             "code": "MONITOR_HEARTBEAT_STALE", "fixture_id": ""},
+        ]
+        rows = build_gate_rows(
+            [ah_row()], [timeline()], [], [], now=NOW, health_rows=health
+        )
+        self.assertEqual(rows[0]["gate_decision"], "WATCH")
+        self.assertEqual(rows[0]["health_gate_status"], "CRITICAL_GLOBAL")
+
+    def test_other_fixture_critical_does_not_block_clean_fixture(self):
+        health = [
+            {"checked_utc": NOW.isoformat(), "component": "SYSTEM", "overall_status": "CRITICAL"},
+            {"component": "MARKET_ODDS", "severity": "CRITICAL",
+             "code": "POST_XI_ODDS_STALE", "fixture_id": "99"},
+        ]
+        rows = build_gate_rows(
+            [ah_row()], [timeline()], [], [], now=NOW, health_rows=health
+        )
+        self.assertEqual(rows[0]["gate_decision"], "SHADOW BET")
+        self.assertEqual(rows[0]["health_gate_status"], "HEALTHY_FOR_FIXTURE")
+
+    def test_stale_health_report_fails_closed(self):
+        health = [{
+            "checked_utc": "2026-08-11T11:55:00+00:00",
+            "component": "SYSTEM", "overall_status": "HEALTHY",
+        }]
+        status, code, _, blocked = safety_health_gate(health, "10", NOW)
+        self.assertEqual(status, "STALE")
+        self.assertEqual(code, "HEALTH_REPORT_STALE")
+        self.assertTrue(blocked)
+
+    def test_history_schema_migrates_when_fields_expand(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "history.csv")
+            with open(path, "w", encoding="utf-8-sig", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["fixture_id"])
+                writer.writeheader()
+                writer.writerow({"fixture_id": "old"})
+            append_csv(path, ["fixture_id", "health_gate_status"], [{
+                "fixture_id": "new", "health_gate_status": "HEALTHY",
+            }])
+            with open(path, "r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(rows[0]["fixture_id"], "old")
+            self.assertEqual(rows[1]["health_gate_status"], "HEALTHY")
 
 
 if __name__ == "__main__":
