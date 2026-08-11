@@ -61,6 +61,12 @@ class LineupShockRobustnessResearchTests(unittest.TestCase):
             {"scope": "SIDE_AWAY", "rows": 60, "avg_signed_close_move": 0.11,
              "avg_signed_move_ci_low": 0.01, "large_move_hit_ci_low": 0.50,
              "nonflat_direction_hit": 0.69},
+            {"scope": "QUALITY_HIGH", "rows": 110, "avg_signed_close_move": 0.11,
+             "avg_signed_move_ci_low": 0.04, "large_move_hit_ci_low": 0.61,
+             "nonflat_direction_hit": 0.70},
+            {"scope": "QUALITY_MEDIUM", "rows": 10, "avg_signed_close_move": -0.01,
+             "avg_signed_move_ci_low": -0.10, "large_move_hit_ci_low": 0.20,
+             "nonflat_direction_hit": 0.40},
         ]
         return pd.DataFrame(rows)
 
