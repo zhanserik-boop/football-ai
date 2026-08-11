@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
-CHECKPOINTS_MINUTES = (40.0, 30.0, 20.0, 10.0, 5.0)
+CHECKPOINTS_MINUTES = (60.0, 45.0, 30.0, 20.0, 10.0, 5.0)
 
 
 def utc_now():
@@ -76,6 +76,9 @@ def build_parser():
     parser.add_argument("--json", default="v4_multileague_predictions.json")
     parser.add_argument("--lineup-router", default="v4_lineup_source_router.py")
     parser.add_argument("--lineup-audit-json", default="v4_lineup_source_audit.json")
+    parser.add_argument("--lineup-shock-runner", default="v4_lineup_shock_research.py")
+    parser.add_argument("--player-values", default="v4_player_values.json")
+    parser.add_argument("--lineup-shock-json", default="v4_lineup_shock_research.json")
     parser.add_argument("--max-hours", type=float, default=12.0)
     return parser
 
@@ -102,6 +105,7 @@ def main(argv=None):
             return completed.returncode
 
         router_path = Path(args.lineup_router)
+        router_succeeded = False
         if router_path.exists():
             routed = subprocess.run(
                 [
@@ -113,6 +117,23 @@ def main(argv=None):
             )
             if routed.returncode != 0:
                 print("LINEUP ROUTER STATUS: FAILED_CLOSED — API-Football watcher continues")
+            else:
+                router_succeeded = True
+
+        shock_path = Path(args.lineup_shock_runner)
+        if router_succeeded and shock_path.exists():
+            shocked = subprocess.run(
+                [
+                    sys.executable, str(shock_path),
+                    "--predictions", args.json,
+                    "--player-values", args.player_values,
+                    "--lineup-audit", args.lineup_audit_json,
+                    "--json", args.lineup_shock_json,
+                ],
+                check=False,
+            )
+            if shocked.returncode != 0:
+                print("LINEUP SHOCK STATUS: FAILED_CLOSED — no research adjustment accepted")
 
         document = load_document(args.json)
         pending = pending_lineups(document)
