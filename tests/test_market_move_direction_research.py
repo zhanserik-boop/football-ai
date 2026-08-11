@@ -16,6 +16,11 @@ class MarketMoveDirectionResearchTests(unittest.TestCase):
                 rows.append(rec)
         return pd.DataFrame(rows)
 
+    def test_home_handicap_move_maps_to_correct_strengthening_side(self):
+        self.assertEqual(mod.strengthening_side_from_home_handicap_move(-0.25), "HOME_STRENGTHEN")
+        self.assertEqual(mod.strengthening_side_from_home_handicap_move(0.25), "AWAY_STRENGTHEN")
+        self.assertEqual(mod.strengthening_side_from_home_handicap_move(0.0), "FLAT")
+
     def test_walk_forward_uses_prior_seasons_only(self):
         out = mod.walk_forward(self._frame())
         s23 = out[out["season"] == 2023]
