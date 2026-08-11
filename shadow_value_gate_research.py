@@ -121,7 +121,10 @@ def build():
     import market_anchored_fair_ah_v2 as v2
     import market_move_direction_research as direction
 
-    lineup_df = lineup.build()
+    if Path(lineup.OUTPUT_FILE).exists():
+        lineup_df = pd.read_csv(lineup.OUTPUT_FILE, encoding="utf-8-sig")
+    else:
+        lineup_df = lineup.build()
     enriched = v2.load_enriched()
     direction_df = direction.walk_forward(enriched)
     combined = combine(lineup_df, direction_df)
