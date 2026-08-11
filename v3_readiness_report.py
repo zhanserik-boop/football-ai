@@ -61,6 +61,7 @@ V3_REQUIRED_FILES = (
     "v3_external_supervisor.py",
     "install_v3_supervisor.ps1",
     "uninstall_v3_supervisor.ps1",
+    "v3_daily_digest.py",
 )
 
 FIELDS = (
