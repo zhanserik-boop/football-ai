@@ -56,3 +56,6 @@ jobs:
 
       - name: Audit historical lineup schema
         run: python historical_lineup_schema_audit.py
+
+      - name: Build formation context database
+        run: python formation_context_builder.py
