@@ -126,6 +126,52 @@ class V4MultiLeagueTests(unittest.TestCase):
         self.assertEqual(market["home_handicap"], -0.5)
         self.assertEqual(market["bookmakers"], 2)
 
+    def test_consensus_selects_balanced_main_line_from_alternative_ladder(self):
+        rows = []
+        for book_id in ("1", "2", "3"):
+            for home_line, home_odd, away_odd in (
+                (-1.0, 5.00, 1.15),
+                (0.0, 3.20, 1.35),
+                (1.0, 1.95, 1.95),
+                (2.0, 1.20, 4.20),
+            ):
+                rows.extend([
+                    {
+                        "bookmaker_id": book_id, "bookmaker": book_id,
+                        "side": "HOME", "handicap": home_line, "odd": home_odd,
+                    },
+                    {
+                        "bookmaker_id": book_id, "bookmaker": book_id,
+                        "side": "AWAY", "handicap": -home_line, "odd": away_odd,
+                    },
+                ])
+        market = v4.market_consensus(rows)
+        self.assertEqual(market["home_handicap"], 1.0)
+        self.assertEqual(market["bookmakers"], 3)
+        self.assertEqual(market["bookmakers_with_main_line"], 3)
+        self.assertEqual(market["consensus_version"], 2)
+
+    def test_new_consensus_version_resets_invalid_opening_baseline(self):
+        consensus = {
+            "home_handicap": 1.0, "home_avg_odds": 1.95,
+            "away_avg_odds": 1.95, "fair_home_cover_probability": 0.5,
+            "bookmakers": 3, "best_home_odds": 2.0, "best_away_odds": 2.0,
+            "bookmakers_with_main_line": 3, "consensus_version": 2,
+        }
+        old_state = {
+            "market_consensus_version": 1, "opening_home_handicap": 0.0,
+            "last_odds_fingerprint": "old",
+        }
+        market = v4.market_agent(
+            consensus, NOW.isoformat(), old_state, "new", NOW.isoformat(), NOW
+        )
+        self.assertEqual(market["opening_home_handicap"], 1.0)
+        self.assertEqual(market["home_line_move"], 0.0)
+        state = {"fixtures": {"10": dict(old_state)}}
+        v4.snapshot_state_update(state, "10", market, "new", {"confirmed": False}, NOW)
+        self.assertEqual(state["fixtures"]["10"]["opening_home_handicap"], 1.0)
+        self.assertEqual(state["fixtures"]["10"]["market_consensus_version"], 2)
+
     def test_data_quality_veto_blocks_low_sample(self):
         low = v4.completed_team_metrics({}, 1, NOW)
         market = {"status": "OK", "bookmakers": 3, "freshness": "FRESH"}
