@@ -23,9 +23,9 @@ def run_script_with_v3_context(filename):
     # run the independent shadow gate. Live AH/Master decisions are unchanged.
     if filename == base.MASTER_AGENT:
         _original_run_script(MARKET_TIMELINE)
+        _original_run_script(HEALTH_WATCHDOG)
         _original_run_script(SHADOW_VALUE_GATE)
         _original_run_script(SHADOW_NOTIFIER)
-        _original_run_script(HEALTH_WATCHDOG)
 
     # Base refreshes closing lines/results on its normal low-frequency cycle.
     # Reuse that cache to evaluate Value Gate with zero additional API calls.
