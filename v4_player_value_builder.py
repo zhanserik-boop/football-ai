@@ -7,7 +7,6 @@ Its output is research-only until forward validation approves the lineup model.
 from __future__ import annotations
 
 import argparse
-import math
 from collections import defaultdict
 
 import v4_multileague_shadow as v4
@@ -16,6 +15,14 @@ import v4_multileague_shadow as v4
 DEFAULT_INPUT = "v4_multileague_predictions.json"
 DEFAULT_OUTPUT = "v4_player_values.json"
 DEFAULT_SEASONS = "2025,2026"
+BASELINE_FORMATIONS = {
+    "4-3-3": {"DEFENDER": 4, "MIDFIELDER": 3, "ATTACKER": 3},
+    "4-4-2": {"DEFENDER": 4, "MIDFIELDER": 4, "ATTACKER": 2},
+    "3-5-2": {"DEFENDER": 3, "MIDFIELDER": 5, "ATTACKER": 2},
+    "3-4-3": {"DEFENDER": 3, "MIDFIELDER": 4, "ATTACKER": 3},
+    "5-3-2": {"DEFENDER": 5, "MIDFIELDER": 3, "ATTACKER": 2},
+    "5-4-1": {"DEFENDER": 5, "MIDFIELDER": 4, "ATTACKER": 1},
+}
 
 
 def parse_seasons(value):
@@ -37,6 +44,13 @@ def teams_from_predictions(document):
     return [teams[key] for key in sorted(teams, key=lambda item: int(item))]
 
 
+def normalize_position(value):
+    position = v4.clean(value).upper()
+    if position in {"FORWARD", "STRIKER"}:
+        return "ATTACKER"
+    return position or "UNKNOWN"
+
+
 def aggregate_player_item(item, expected_team_id):
     player = item.get("player") or {}
     totals = {
@@ -55,7 +69,7 @@ def aggregate_player_item(item, expected_team_id):
         appearances = v4.safe_float(games.get("appearences")) or 0.0
         starts = v4.safe_float(games.get("lineups")) or 0.0
         rating = v4.safe_float(games.get("rating"))
-        position = v4.clean(games.get("position")).upper()
+        position = normalize_position(games.get("position"))
         if position:
             totals["position"] = position
         totals["minutes"] += minutes
@@ -88,12 +102,63 @@ def merge_player_season(target, row, season_weight):
         target["rating_minutes"] += row["minutes"] * season_weight
 
 
-def finalize_team_profile(team, players, seasons, api_errors):
-    active = [row for row in players.values() if row["minutes"] > 0]
+def select_formation_baseline(players):
+    by_position = defaultdict(list)
+    for row in players:
+        by_position[row["position"]].append(row)
+    for rows in by_position.values():
+        rows.sort(key=lambda row: (-row["importance"], row["player_name"]))
+    if not by_position["GOALKEEPER"]:
+        return [], "UNAVAILABLE"
+    candidates = []
+    for formation, required in BASELINE_FORMATIONS.items():
+        if any(len(by_position[position]) < count for position, count in required.items()):
+            continue
+        selected = by_position["GOALKEEPER"][:1]
+        for position, count in required.items():
+            selected += by_position[position][:count]
+        candidates.append((sum(row["importance"] for row in selected), formation, selected))
+    if not candidates:
+        return [], "UNAVAILABLE"
+    _, formation, selected = max(candidates, key=lambda row: (row[0], row[1]))
+    return selected, formation
+
+
+def current_squad_rows(payload, expected_team_id):
+    players = {}
+    for item in payload.get("response", []):
+        if (item.get("team") or {}).get("id") != expected_team_id:
+            continue
+        for player in item.get("players", []):
+            player_id = player.get("id")
+            if player_id is None:
+                continue
+            players[str(player_id)] = {
+                "player_id": player_id,
+                "player_name": v4.clean(player.get("name")),
+                "age": player.get("age"),
+                "position": normalize_position(player.get("position")),
+            }
+    return players
+
+
+def finalize_team_profile(team, players, current_squad, seasons, api_errors):
+    squad_available = bool(current_squad)
+    if squad_available:
+        for player_id, squad_row in current_squad.items():
+            row = players[player_id]
+            row["player_id"] = squad_row["player_id"]
+            row["player_name"] = squad_row["player_name"] or row["player_name"]
+            row["age"] = squad_row.get("age") or row.get("age")
+            row["position"] = squad_row["position"]
+        candidates = [players[player_id] for player_id in current_squad]
+    else:
+        candidates = list(players.values())
+    active = [row for row in candidates if row["minutes"] > 0]
     max_minutes = max((row["minutes"] for row in active), default=0.0)
     max_starts = max((row["starts"] for row in active), default=0.0)
     output_players = []
-    for row in active:
+    for row in candidates:
         rating = (
             row["rating_weight"] / row["rating_minutes"]
             if row["rating_minutes"] > 0 else None
@@ -121,13 +186,19 @@ def finalize_team_profile(team, players, seasons, api_errors):
             "importance": round(importance, 4),
         })
     output_players.sort(key=lambda row: (-row["importance"], row["player_name"]))
-    goalkeepers = [row for row in output_players if row["position"] == "GOALKEEPER"]
-    outfield = [row for row in output_players if row["position"] != "GOALKEEPER"]
-    baseline = (goalkeepers[:1] + outfield[:10]) if goalkeepers else output_players[:11]
+    baseline, baseline_formation = select_formation_baseline(output_players)
     baseline_score = sum(row["importance"] for row in baseline)
-    if len(active) >= 15 and max_minutes >= 900:
+    coverage = len(active) / len(current_squad) if current_squad else 0.0
+    baseline_valid = len(baseline) == 11 and baseline_formation != "UNAVAILABLE"
+    if (
+        squad_available and baseline_valid and len(current_squad) >= 18
+        and len(active) >= 15 and coverage >= 0.65 and max_minutes >= 900
+    ):
         quality = "HIGH"
-    elif len(active) >= 11 and max_minutes >= 450:
+    elif (
+        squad_available and baseline_valid and len(active) >= 11
+        and coverage >= 0.50 and max_minutes >= 450
+    ):
         quality = "MEDIUM"
     else:
         quality = "LOW"
@@ -137,9 +208,15 @@ def finalize_team_profile(team, players, seasons, api_errors):
         **team,
         "seasons": seasons,
         "data_quality": quality,
+        "squad_filter_status": "CURRENT_SQUAD" if squad_available else "MISSING",
+        "current_squad_size": len(current_squad),
+        "current_squad_players_with_stats": len(active),
+        "current_squad_coverage": round(coverage, 4),
         "players_with_minutes": len(active),
         "max_weighted_minutes": round(max_minutes, 1),
         "baseline_player_ids": [row["player_id"] for row in baseline],
+        "baseline_formation": baseline_formation,
+        "baseline_valid": baseline_valid,
         "baseline_score": round(baseline_score, 4),
         "players": output_players,
         "api_errors": api_errors,
@@ -154,6 +231,15 @@ def fetch_team_profile(client, team, seasons):
         "rating_minutes": 0.0,
     })
     errors = []
+    squad_payload, squad_meta = client.get(
+        "/players/squads", {"team": team["team_id"]},
+        ttl_minutes=1440, allow_stale=True,
+    )
+    if squad_meta.get("error"):
+        errors.append(squad_meta["error"])
+    current_squad = current_squad_rows(squad_payload, team["team_id"])
+    if not current_squad:
+        errors.append("current squad unavailable")
     newest = max(seasons)
     for season in seasons:
         season_weight = 1.0 if season == newest else 0.65 ** (newest - season)
@@ -179,7 +265,7 @@ def fetch_team_profile(client, team, seasons):
             if page > 10:
                 errors.append("players pagination safety limit exceeded")
                 break
-    return finalize_team_profile(team, combined, seasons, errors)
+    return finalize_team_profile(team, combined, current_squad, seasons, errors)
 
 
 def build_parser():
