@@ -23,6 +23,18 @@ def _clean_text(value):
     return text
 
 
+def _normalize_match_dates(series):
+    """Return timezone-naive normalized UTC dates for safe joins.
+
+    Historical coach rows may contain ISO timestamps with a UTC suffix while
+    the football-data context uses date-only values. Pandas refuses to merge
+    timezone-aware and timezone-naive datetime columns, so parse everything as
+    UTC first and then drop timezone information after normalizing to midnight.
+    """
+    parsed = pd.to_datetime(series, errors="coerce", utc=True)
+    return parsed.dt.normalize().dt.tz_localize(None)
+
+
 def load_coach_history(filename=COACH_FILE):
     if not os.path.exists(filename):
         raise FileNotFoundError(
@@ -40,7 +52,7 @@ def load_coach_history(filename=COACH_FILE):
     df = df.copy()
     df["season"] = pd.to_numeric(df["season"], errors="coerce").astype("Int64")
     df["fixture_id"] = pd.to_numeric(df["fixture_id"], errors="coerce").astype("Int64")
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+    df["date"] = _normalize_match_dates(df["date"])
     for col in ["match_home", "match_away", "team"]:
         df[col] = df[col].map(normalize_team_name)
     for col in ["coach", "formation", "coach_status"]:
@@ -63,7 +75,7 @@ def load_context(filename=CONTEXT_FILE):
         raise ValueError(f"{filename}: missing columns {sorted(missing)}")
     df = df.copy()
     df["season"] = pd.to_numeric(df["season"], errors="coerce").astype("Int64")
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+    df["date"] = _normalize_match_dates(df["date"])
     df["home_team"] = df["home_team"].map(normalize_team_name)
     df["away_team"] = df["away_team"].map(normalize_team_name)
     return df

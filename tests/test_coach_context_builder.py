@@ -1,9 +1,16 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from coach_context_builder import attach_match_metrics, build_coach_context
+from coach_context_builder import (
+    attach_match_metrics,
+    build_coach_context,
+    load_coach_history,
+    load_context,
+)
 
 
 class CoachContextTests(unittest.TestCase):
@@ -99,6 +106,49 @@ class CoachContextTests(unittest.TestCase):
         self.assertAlmostEqual(beta["close_ah_team_line"], 0.5, places=6)
         self.assertAlmostEqual(beta["ah_margin"], -0.5, places=6)
         self.assertAlmostEqual(beta["ah_cover_score"], 0.0, places=6)
+
+    def test_file_loaders_normalize_timezone_aware_and_naive_dates(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            coach_path = root / "coaches.csv"
+            context_path = root / "context.csv"
+
+            pd.DataFrame([
+                {
+                    "season": 2025,
+                    "fixture_id": 1,
+                    "date": "2025-08-01T19:00:00+00:00",
+                    "match_home": "Alpha",
+                    "match_away": "Beta",
+                    "team": "Alpha",
+                    "coach": "Coach A",
+                    "formation": "4-3-3",
+                    "coach_status": "OK",
+                }
+            ]).to_csv(coach_path, index=False, encoding="utf-8-sig")
+
+            pd.DataFrame([
+                {
+                    "season": 2025,
+                    "date": "2025-08-01",
+                    "home_team": "Alpha",
+                    "away_team": "Beta",
+                    "home_goals": 1,
+                    "away_goals": 0,
+                    "home_xg": 1.4,
+                    "away_xg": 0.7,
+                    "close_ah_home_line": -0.5,
+                }
+            ]).to_csv(context_path, index=False, encoding="utf-8-sig")
+
+            coaches = load_coach_history(coach_path)
+            context = load_context(context_path)
+            self.assertIsNone(coaches["date"].dt.tz)
+            self.assertIsNone(context["date"].dt.tz)
+            merged = attach_match_metrics(coaches, context)
+            self.assertEqual(len(merged), 1)
+            self.assertEqual(merged.iloc[0]["side"], "HOME")
+            self.assertAlmostEqual(merged.iloc[0]["xg_for"], 1.4, places=6)
 
 
 if __name__ == "__main__":
