@@ -32,6 +32,10 @@ squad_transfer_update_state.json
 current_squads_2026.csv
 transfers_2026.csv
 
+# Generated historical research data
+epl_context_history.csv
+epl_context_coverage.csv
+
 # Live generated outputs
 market_snapshots_v2.csv
 live_lineups_v2.csv
