@@ -31,7 +31,7 @@ def prepare(root, with_drill=True):
     frozen.write_text("print('frozen')\n", encoding="utf-8")
     write_json(Path(root) / "manifest.json", {
         "schema_version": 1,
-        "release": "V3_SHADOW_FROZEN",
+        "release": mod.FROZEN_RELEASE,
         "frozen_at_utc": NOW.isoformat(),
         "source_commit": "test",
         "files": {"engine.py": mod.git_blob_sha1(frozen)},
@@ -41,6 +41,22 @@ def prepare(root, with_drill=True):
 
 
 class V3FreezeGuardTests(unittest.TestCase):
+    def test_windows_crlf_matches_repository_lf_blob(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "engine.py"
+            path.write_bytes(b"first\nsecond\n")
+            expected = mod.git_blob_sha1(path)
+            path.write_bytes(b"first\r\nsecond\r\n")
+            self.assertEqual(mod.git_blob_sha1(path), expected)
+
+    def test_real_text_change_still_changes_hash(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "engine.py"
+            path.write_bytes(b"first\nsecond\n")
+            expected = mod.git_blob_sha1(path)
+            path.write_bytes(b"first\r\nchanged\r\n")
+            self.assertNotEqual(mod.git_blob_sha1(path), expected)
+
     def test_approved_files_and_drill_allow_startup(self):
         with TemporaryDirectory() as directory:
             prepare(directory)
