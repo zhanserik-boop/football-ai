@@ -67,15 +67,35 @@ class CoachContextTests(unittest.TestCase):
         alpha = result[result["team"] == "Alpha"].reset_index(drop=True)
         self.assertEqual(alpha.loc[2, "coach_change_flag"], 1)
         self.assertEqual(alpha.loc[2, "new_manager_first_match"], 1)
-        self.assertEqual(alpha.loc[2, "coach_match_number"], 1)
+        self.assertEqual(alpha.loc[2, "coach_spell_match_number"], 1)
         self.assertEqual(alpha.loc[2, "previous_coach"], "Coach A")
 
-    def test_new_manager_window_is_first_five_matches(self):
-        coaches = self._coach_rows(["Coach A"] * 6)
-        ctx = self._base_context([f"2025-08-{i:02d}" for i in range(1, 7)])
+    def test_initial_observed_coach_is_not_counted_as_a_change(self):
+        coaches = self._coach_rows(["Coach A"] * 3)
+        ctx = self._base_context(["2025-08-01", "2025-08-02", "2025-08-03"])
         result = build_coach_context(attach_match_metrics(coaches, ctx))
         alpha = result[result["team"] == "Alpha"].reset_index(drop=True)
-        self.assertEqual(alpha["new_manager_window"].tolist(), [1, 1, 1, 1, 1, 0])
+        self.assertEqual(alpha.loc[0, "coach_change_flag"], 0)
+        self.assertEqual(alpha.loc[0, "new_manager_first_match"], 0)
+        self.assertEqual(alpha["new_manager_window"].tolist(), [0, 0, 0])
+
+    def test_new_manager_window_is_first_five_matches_of_changed_spell(self):
+        coaches = self._coach_rows(["Coach A", "Coach C", "Coach C", "Coach C", "Coach C", "Coach C", "Coach C"])
+        ctx = self._base_context([f"2025-08-{i:02d}" for i in range(1, 8)])
+        result = build_coach_context(attach_match_metrics(coaches, ctx))
+        alpha = result[result["team"] == "Alpha"].reset_index(drop=True)
+        self.assertEqual(alpha["coach_spell_match_number"].tolist(), [1, 1, 2, 3, 4, 5, 6])
+        self.assertEqual(alpha["new_manager_window"].tolist(), [0, 1, 1, 1, 1, 1, 0])
+
+    def test_reappointment_starts_new_spell(self):
+        coaches = self._coach_rows(["Coach A", "Coach A", "Coach C", "Coach C", "Coach A"])
+        ctx = self._base_context([f"2025-08-{i:02d}" for i in range(1, 6)])
+        result = build_coach_context(attach_match_metrics(coaches, ctx))
+        row5 = result[(result["team"] == "Alpha") & (result["fixture_id"] == 5)].iloc[0]
+        self.assertEqual(row5["coach_change_flag"], 1)
+        self.assertEqual(row5["previous_coach"], "Coach C")
+        self.assertEqual(row5["coach_spell_match_number"], 1)
+        self.assertEqual(row5["new_manager_first_match"], 1)
 
     def test_profile_uses_only_prior_matches(self):
         coaches = self._coach_rows(["Coach A"] * 4)
