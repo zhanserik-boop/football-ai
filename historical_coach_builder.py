@@ -24,6 +24,8 @@ OUTPUT_FILE = "epl_coach_history.csv"
 STATE_FILE = "historical_coach_builder_state.json"
 DEFAULT_BATCH_SIZE = 5
 REQUEST_PAUSE_SECONDS = 0.15
+FILE_REPLACE_RETRIES = 20
+FILE_REPLACE_RETRY_SECONDS = 0.5
 
 OUTPUT_FIELDS = [
     "collected_utc",
@@ -182,8 +184,6 @@ def parse_batch_response(data, catalog, requested_ids, collected_utc):
 
 
 def placeholder_rows(catalog_item, collected_utc):
-    # Used only when the API returns the fixture but no usable team/lineup payload.
-    # Team ids/names are intentionally left blank rather than guessed.
     return [
         {
             "collected_utc": collected_utc,
@@ -203,6 +203,30 @@ def placeholder_rows(catalog_item, collected_utc):
     ]
 
 
+def replace_file_with_retry(temp, target):
+    temp = Path(temp)
+    target = Path(target)
+    last_error = None
+    for attempt in range(1, FILE_REPLACE_RETRIES + 1):
+        try:
+            os.replace(temp, target)
+            return
+        except PermissionError as exc:
+            last_error = exc
+            if attempt == 1:
+                print(
+                    f"Output file is temporarily locked: {target}. "
+                    "Retrying automatically..."
+                )
+            if attempt < FILE_REPLACE_RETRIES:
+                time.sleep(FILE_REPLACE_RETRY_SECONDS)
+    raise RuntimeError(
+        f"Cannot replace {target} after {FILE_REPLACE_RETRIES} retries. "
+        "Close the CSV/JSON file in Excel or another program and run the builder again; "
+        "completed batches already saved will not be downloaded again."
+    ) from last_error
+
+
 def atomic_write_csv(rows, filename=OUTPUT_FILE):
     target = Path(filename)
     temp = target.with_suffix(target.suffix + ".tmp")
@@ -210,14 +234,15 @@ def atomic_write_csv(rows, filename=OUTPUT_FILE):
         writer = csv.DictWriter(f, fieldnames=OUTPUT_FIELDS, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
-    os.replace(temp, target)
+    replace_file_with_retry(temp, target)
 
 
 def save_state(payload, filename=STATE_FILE):
-    temp = filename + ".tmp"
+    target = Path(filename)
+    temp = target.with_suffix(target.suffix + ".tmp")
     with open(temp, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
-    os.replace(temp, filename)
+    replace_file_with_retry(temp, target)
 
 
 def chunks(values, size):
@@ -269,7 +294,6 @@ def collect(retry_unavailable=False, batch_size=DEFAULT_BATCH_SIZE):
         total_requests += 1
         parsed, seen = parse_batch_response(data, catalog, batch, collected_utc)
 
-        # If an id was omitted from the API response, leave it missing so a future run retries it.
         successful_ids = set(seen)
         rows_by_fixture = {}
         for row in parsed:
