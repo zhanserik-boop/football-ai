@@ -71,3 +71,9 @@ jobs:
 
       - name: Research AH market movement direction
         run: python market_move_direction_research.py
+
+      - name: Build historical prior-only lineup shock
+        run: python historical_lineup_shock_builder.py
+
+      - name: Research shadow lineup + directional value gate
+        run: python shadow_value_gate_research.py

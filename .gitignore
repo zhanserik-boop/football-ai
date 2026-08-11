@@ -48,6 +48,9 @@ epl_market_anchored_fair_ah_v2.csv
 epl_market_anchored_fair_ah_v2_summary.csv
 epl_market_move_direction.csv
 epl_market_move_direction_summary.csv
+epl_historical_lineup_shock.csv
+epl_shadow_value_gate.csv
+epl_shadow_value_gate_summary.csv
 new_manager_effect_events.csv
 new_manager_effect_summary.csv
 new_manager_effect_by_season.csv
