@@ -47,12 +47,27 @@ alternative-line mapping before any cross-league market signal is trusted.
 The supplied target file contains the 12 matches from the 11 August 2026 image.
 For a different slate, copy the CSV and pass `--input`.
 
+For matchday monitoring, run the bounded watcher instead of repeatedly launching
+the one-shot command by hand:
+
+```powershell
+python .\v4_matchday_watch.py
+```
+
+It refreshes at approximately T-40, T-30, T-20, T-10 and T-5 for fixtures whose
+XI is still unavailable. It stops when no pre-match fixture is waiting, after
+the final checkpoint, or at the configured `--max-hours` limit. This avoids
+continuous polling while covering API-Football's usual publication window.
+
 ## Safety and timing
 
 - A fixture whose kickoff has passed or whose provider status is no longer
   `NS`/`TBD` is excluded before team-form, odds, or lineup API calls. It remains
   visible in the report as `PASS` with `EXCLUDED_NOT_PREMATCH`.
 - Before confirmed lineups, an otherwise valid candidate remains `WATCH`.
+- Lineup status is explicit: `NOT_QUERIED`, `NOT_PUBLISHED`, `INCOMPLETE`, or
+  `CONFIRMED`. `NOT_PUBLISHED` means the provider returned no lineup rows; it
+  does not claim that the coaching staff has not selected its XI.
 - A `SHADOW BET` requires HIGH data quality, validated numerical lineup values,
   and verified post-lineup market evidence. Until the cross-league player model
   is validated, real matches are capped at `WATCH` even when a directional edge
