@@ -103,6 +103,13 @@ def default_state():
         "lineup_results": {},
         "signal_entries": {},
         "odds_freshness": {},
+        "health": {
+            "last_cycle_started_utc": None,
+            "last_cycle_completed_utc": None,
+            "last_cycle_status": "STARTING",
+            "consecutive_errors": 0,
+            "last_error": "",
+        },
     }
 
 
@@ -126,6 +133,7 @@ def save_state():
 
 
 state = load_state()
+state.setdefault("health", default_state()["health"].copy())
 
 
 # =========================================================
@@ -904,6 +912,32 @@ def run_cycle():
 
 
 # =========================================================
+# HEALTH HEARTBEAT
+# =========================================================
+def mark_health(status, error=""):
+    now_iso = utc_now().isoformat()
+    health = state.setdefault("health", default_state()["health"].copy())
+    status = str(status or "").upper()
+
+    if status == "RUNNING":
+        health["last_cycle_started_utc"] = now_iso
+        health["last_cycle_status"] = "RUNNING"
+    elif status == "OK":
+        health["last_cycle_completed_utc"] = now_iso
+        health["last_cycle_status"] = "OK"
+        health["consecutive_errors"] = 0
+        health["last_error"] = ""
+    elif status == "ERROR":
+        health["last_cycle_status"] = "ERROR"
+        health["consecutive_errors"] = int(
+            health.get("consecutive_errors") or 0
+        ) + 1
+        health["last_error"] = str(error or "")[:500]
+
+    save_state()
+
+
+# =========================================================
 # MAIN
 # =========================================================
 
@@ -925,7 +959,9 @@ print("Press CTRL+C to stop.")
 
 while True:
     try:
+        mark_health("RUNNING")
         run_cycle()
+        mark_health("OK")
         print(
             "\nNext scheduler cycle in",
             MAIN_LOOP_SECONDS // 60,
@@ -938,6 +974,7 @@ while True:
         break
 
     except Exception as e:
+        mark_health("ERROR", repr(e))
         print("\nUNEXPECTED ERROR:", repr(e))
         print("Retry in 60 seconds...")
         time.sleep(60)
