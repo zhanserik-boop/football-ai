@@ -30,6 +30,7 @@ squad_transfer_update_state.json
 schedule_priority_cache.json
 historical_coach_builder_state.json
 shadow_value_gate_notify_state.json
+system_health_notify_state.json
 
 # Automatically regenerated current-season data
 current_squads_2026.csv
@@ -80,6 +81,8 @@ shadow_value_gate_live.csv
 shadow_value_gate_history.csv
 shadow_value_gate_outcomes.csv
 shadow_value_gate_outcome_summary.csv
+system_health_live.csv
+system_health_history.csv
 
 # BTTS live generated outputs
 btts_live_fixtures.csv

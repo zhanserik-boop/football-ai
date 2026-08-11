@@ -7,6 +7,7 @@ MARKET_TIMELINE = "market_timeline_engine.py"
 SHADOW_VALUE_GATE = "shadow_value_gate_v1.py"
 SHADOW_OUTCOME_REPORT = "shadow_value_gate_outcome_report.py"
 SHADOW_NOTIFIER = "shadow_value_gate_notifier.py"
+HEALTH_WATCHDOG = "system_health_watchdog.py"
 
 _original_run_script = base.run_script
 
@@ -24,6 +25,7 @@ def run_script_with_v3_context(filename):
         _original_run_script(MARKET_TIMELINE)
         _original_run_script(SHADOW_VALUE_GATE)
         _original_run_script(SHADOW_NOTIFIER)
+        _original_run_script(HEALTH_WATCHDOG)
 
     # Base refreshes closing lines/results on its normal low-frequency cycle.
     # Reuse that cache to evaluate Value Gate with zero additional API calls.
@@ -42,6 +44,7 @@ def main():
             SHADOW_VALUE_GATE,
             SHADOW_OUTCOME_REPORT,
             SHADOW_NOTIFIER,
+            HEALTH_WATCHDOG,
         )
         if not os.path.exists(path)
     ]
@@ -49,7 +52,7 @@ def main():
         raise SystemExit("Missing V3 live files: " + ", ".join(missing))
 
     base.run_script = run_script_with_v3_context
-    print("V3 orchestration: Value Gate + Outcome Audit + Telegram Monitor enabled")
+    print("V3 orchestration: Value Gate + Outcome Audit + Telegram + Health enabled")
     base.main()
 
 
