@@ -54,6 +54,7 @@ V3_REQUIRED_FILES = (
     "shadow_value_gate_notifier.py",
     "system_health_watchdog.py",
     "v3_readiness_report.py",
+    "v3_forward_test_scorecard.py",
 )
 
 FIELDS = (
