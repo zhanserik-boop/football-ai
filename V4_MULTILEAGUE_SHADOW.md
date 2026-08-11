@@ -116,7 +116,8 @@ python .\v4_player_value_builder.py
 ```
 
 The builder combines weighted minutes, starts, rating and goal contributions,
-selects a research baseline XI, and writes `v4_player_values.json`. It does not
-make one request per player. The output is explicitly `RESEARCH_ONLY` and cannot
-remove `LINEUP_VALUE_UNVALIDATED` until coverage and forward outcome validation
-pass.
+filters historical statistics through the current `/players/squads` roster,
+selects the strongest valid baseline formation from common 3/4/5-defender
+shapes, and writes `v4_player_values.json`. It does not make one request per
+player. The output is explicitly `RESEARCH_ONLY` and cannot remove
+`LINEUP_VALUE_UNVALIDATED` until coverage and forward outcome validation pass.
