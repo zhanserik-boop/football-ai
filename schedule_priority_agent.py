@@ -1,5 +1,4 @@
 import csv
-import json
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,35 +22,21 @@ EPL_LEAGUE_ID = 39
 SEASON = 2026
 LOOKAHEAD_HOURS = 48
 TEAM_SCHEDULE_DAYS = 8
-CACHE_HOURS = 6
 
 CURRENT_SQUADS_FILE = "current_squads_2026.csv"
 OUTPUT_FILE = "schedule_priority_live.csv"
-CACHE_FILE = "schedule_priority_cache.json"
 
 OUTPUT_FIELDS = [
-    "built_utc",
-    "fixture_id",
-    "kickoff_utc",
-    "home_team",
-    "away_team",
-    "team_id",
-    "team_name",
-    "current_competition",
-    "current_round",
-    "current_priority",
-    "next_fixture_id",
-    "next_kickoff_utc",
-    "next_opponent",
-    "next_competition",
-    "next_round",
-    "next_priority",
-    "hours_to_next_match",
-    "matches_next_7d_after_current",
-    "schedule_pressure",
-    "rotation_risk",
-    "reason",
-    "shadow_only",
+    "built_utc", "fixture_id", "kickoff_utc", "home_team", "away_team",
+    "team_id", "team_name", "current_competition", "current_round",
+    "base_current_priority", "table_rank", "table_points", "table_played",
+    "table_zone", "table_pressure_score", "table_pressure",
+    "current_match_importance", "current_effective_priority",
+    "next_fixture_id", "next_kickoff_utc", "next_opponent",
+    "next_competition", "next_round", "next_priority",
+    "hours_to_next_match", "matches_next_7d_after_current",
+    "relative_priority_gap", "schedule_pressure", "rotation_risk",
+    "reason", "shadow_only",
 ]
 
 
@@ -146,6 +131,108 @@ def competition_priority(league_name, round_name=""):
     return min(score, 100)
 
 
+def extract_standings(data):
+    table = {}
+    for league_block in data.get("response", []):
+        league = league_block.get("league") or {}
+        standings_groups = league.get("standings") or []
+        for group in standings_groups:
+            for row in group:
+                team = row.get("team") or {}
+                team_id = team.get("id")
+                if not team_id:
+                    continue
+                all_stats = row.get("all") or {}
+                table[int(team_id)] = {
+                    "rank": int(row.get("rank") or 0),
+                    "points": int(row.get("points") or 0),
+                    "played": int(all_stats.get("played") or 0),
+                    "description": str(row.get("description") or "").strip(),
+                }
+    return table
+
+
+def standings_pressure(team_id, standings):
+    row = standings.get(int(team_id)) if standings else None
+    if not row:
+        return {
+            "rank": "", "points": "", "played": "", "zone": "UNKNOWN",
+            "score": 0, "label": "LOW",
+        }
+
+    rank = int(row.get("rank") or 0)
+    points = int(row.get("points") or 0)
+    played = int(row.get("played") or 0)
+    description = str(row.get("description") or "").lower()
+    season_progress = min(max(played / 38.0, 0.0), 1.0)
+
+    if played < 8:
+        base = 0
+    elif played < 20:
+        base = 3
+    elif played < 30:
+        base = 7
+    else:
+        base = 12
+
+    zone = "MIDTABLE"
+    zone_bonus = 0
+
+    if rank == 1:
+        zone = "TITLE"
+        zone_bonus = 12
+    elif rank <= 5:
+        zone = "EUROPE"
+        zone_bonus = 9
+    elif rank >= 18:
+        zone = "RELEGATION"
+        zone_bonus = 12
+    elif rank >= 15:
+        zone = "SURVIVAL"
+        zone_bonus = 8
+
+    if "champions" in description or "europa" in description or "conference" in description:
+        zone = "EUROPE"
+        zone_bonus = max(zone_bonus, 10)
+    if "relegation" in description:
+        zone = "RELEGATION"
+        zone_bonus = max(zone_bonus, 12)
+
+    score = round((base + zone_bonus) * (0.5 + 0.5 * season_progress))
+    score = int(min(max(score, 0), 25))
+
+    if score >= 18:
+        label = "VERY HIGH"
+    elif score >= 12:
+        label = "HIGH"
+    elif score >= 6:
+        label = "MEDIUM"
+    else:
+        label = "LOW"
+
+    return {
+        "rank": rank,
+        "points": points,
+        "played": played,
+        "zone": zone,
+        "score": score,
+        "label": label,
+    }
+
+
+def classify_match_importance(base_priority, table_context):
+    effective = min(100, int(base_priority) + int(table_context.get("score") or 0))
+    if effective >= 88:
+        label = "VERY HIGH"
+    elif effective >= 75:
+        label = "HIGH"
+    elif effective >= 65:
+        label = "MEDIUM"
+    else:
+        label = "NORMAL"
+    return effective, label
+
+
 def classify_rotation_risk(current_priority, next_priority, hours_to_next, matches_next_7d):
     if hours_to_next is None:
         return "LOW", "LOW", "No confirmed next fixture in schedule window"
@@ -208,10 +295,14 @@ def find_next_fixture(team_id, current_fixture, schedule_items):
     return future[0] if future else None, future
 
 
-def build_team_context(current_fixture, team_id, team_name, schedule_items):
+def build_team_context(current_fixture, team_id, team_name, schedule_items, standings=None):
     next_fixture, future = find_next_fixture(team_id, current_fixture, schedule_items)
-    current_priority = competition_priority(
+    base_current_priority = competition_priority(
         current_fixture["competition"], current_fixture["round"]
+    )
+    table_ctx = standings_pressure(team_id, standings or {})
+    current_effective_priority, match_importance = classify_match_importance(
+        base_current_priority, table_ctx
     )
 
     if next_fixture:
@@ -232,13 +323,28 @@ def build_team_context(current_fixture, team_id, team_name, schedule_items):
     seven_day_limit = current_fixture["kickoff"] + timedelta(days=7)
     matches_next_7d = sum(1 for x in future if x["kickoff"] <= seven_day_limit)
     pressure, risk, reason = classify_rotation_risk(
-        current_priority, next_priority, hours_to_next, matches_next_7d
+        current_effective_priority, next_priority, hours_to_next, matches_next_7d
+    )
+    relative_gap = next_priority - current_effective_priority if next_fixture else 0
+
+    reason = (
+        f"Current EPL importance={match_importance} "
+        f"(base {base_current_priority} + table {table_ctx['score']} = {current_effective_priority}); "
+        + reason
     )
 
     return {
         "team_id": team_id,
         "team_name": team_name,
-        "current_priority": current_priority,
+        "base_current_priority": base_current_priority,
+        "table_rank": table_ctx["rank"],
+        "table_points": table_ctx["points"],
+        "table_played": table_ctx["played"],
+        "table_zone": table_ctx["zone"],
+        "table_pressure_score": table_ctx["score"],
+        "table_pressure": table_ctx["label"],
+        "current_match_importance": match_importance,
+        "current_effective_priority": current_effective_priority,
         "next_fixture_id": next_fixture["fixture_id"] if next_fixture else "",
         "next_kickoff_utc": next_fixture["kickoff"].isoformat() if next_fixture else "",
         "next_opponent": opponent,
@@ -247,6 +353,7 @@ def build_team_context(current_fixture, team_id, team_name, schedule_items):
         "next_priority": next_priority if next_fixture else "",
         "hours_to_next_match": round(hours_to_next, 2) if hours_to_next is not None else "",
         "matches_next_7d_after_current": matches_next_7d,
+        "relative_priority_gap": relative_gap,
         "schedule_pressure": pressure,
         "rotation_risk": risk,
         "reason": reason,
@@ -268,6 +375,12 @@ def build_rows(now=None):
             "timezone": "UTC",
         },
     )
+
+    standings_data = api_get(
+        "/standings",
+        {"league": EPL_LEAGUE_ID, "season": SEASON},
+    )
+    standings = extract_standings(standings_data)
 
     target_fixtures = []
     for item in epl_data.get("response", []):
@@ -303,7 +416,9 @@ def build_rows(now=None):
         for team_id in (fixture["home_id"], fixture["away_id"]):
             if team_id not in teams:
                 continue
-            ctx = build_team_context(fixture, team_id, teams[team_id], schedules.get(team_id, []))
+            ctx = build_team_context(
+                fixture, team_id, teams[team_id], schedules.get(team_id, []), standings
+            )
             output.append(
                 {
                     "built_utc": built,
@@ -318,7 +433,7 @@ def build_rows(now=None):
                 }
             )
 
-    return output, 1 + len(participating_ids)
+    return output, 2 + len(participating_ids)
 
 
 def main():
@@ -331,7 +446,8 @@ def main():
     if rows:
         for row in rows:
             print(
-                f"{row['team_name']}: pressure={row['schedule_pressure']} "
+                f"{row['team_name']}: importance={row['current_match_importance']} "
+                f"table={row['table_pressure']} pressure={row['schedule_pressure']} "
                 f"rotation={row['rotation_risk']} next={row['next_competition']} "
                 f"in {row['hours_to_next_match']}h"
             )
