@@ -8,6 +8,8 @@ from pathlib import Path
 MANIFEST_FILE = "v3_frozen_manifest.json"
 DRILL_FILE = "v3_emergency_drill_report.json"
 OUTPUT_FILE = "v3_freeze_guard_report.json"
+FROZEN_RELEASE = "V3_SHADOW_FROZEN_R1"
+TEXT_SUFFIXES = {".py", ".ps1", ".json", ".md", ".yml", ".yaml"}
 
 
 def utc_now():
@@ -35,7 +37,13 @@ def write_json_atomic(path, value):
 
 
 def git_blob_sha1(path):
-    data = Path(path).read_bytes()
+    path = Path(path)
+    data = path.read_bytes()
+    # Git commonly checks text out as CRLF on Windows even though the blob in
+    # the repository uses LF. Freeze semantic text content, not the operating
+    # system's line-ending representation.
+    if path.suffix.lower() in TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
     header = f"blob {len(data)}\0".encode("ascii")
     return hashlib.sha1(header + data).hexdigest()
 
@@ -54,7 +62,7 @@ def validate_manifest(manifest):
     files = manifest.get("files") if isinstance(manifest, dict) else None
     return all([
         manifest.get("schema_version") == 1,
-        manifest.get("release") == "V3_SHADOW_FROZEN",
+        manifest.get("release") == FROZEN_RELEASE,
         isinstance(files, dict),
         bool(files),
         all(

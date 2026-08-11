@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "release": "V3_SHADOW_FROZEN",
+  "release": "V3_SHADOW_FROZEN_R1",
   "frozen_at_utc": "2026-08-11T15:00:00+00:00",
-  "source_commit": "Step 34 freeze tree",
+  "source_commit": "Step 34 freeze tree + Windows portability R1",
   "repository": "zhanserik-boop/football-ai",
   "mode": "SHADOW_ONLY",
   "automatic_real_betting_enabled": false,
@@ -30,7 +30,7 @@
     "v3_emergency_drill.py": "9432fdf9e3de05abfc35d90025f558415dc12408",
     "v3_external_supervisor.py": "1a7e4c775285385b9dbed8492e6498ad118d801a",
     "v3_forward_test_scorecard.py": "35cea3b320ee3395ea9737cf50ede14fe6203dea",
-    "v3_freeze_guard.py": "986477f7e394f0ca1e8d42e75444cbc7c9d53be6",
+    "v3_freeze_guard.py": "e0aae6084432b57128d47cf0f87bb2836421dfd1",
     "v3_readiness_report.py": "f84b92e09fad0554c36db9f446595f757b826890",
     "v3_runtime_checkpoint.py": "25e252e9a6a260b0e0816ef9b4c4493c13272012",
     "v3_shadow_risk_engine.py": "20f24332f3c59643cbff32ec774e2e4e7d157fa7"

@@ -1,6 +1,8 @@
 # Football AI V3 — Shadow Freeze
 
-Frozen release: `V3_SHADOW_FROZEN`
+Frozen release: `V3_SHADOW_FROZEN_R1`
+
+Revision R1 adds Windows CRLF/LF portability to hash verification. It does not change the decision engine, thresholds, or shadow-only policy.
 
 V3 is operationally complete and frozen in shadow-only mode. The production AH Agent and Master Agent remain unchanged, and V3 does not place real bets automatically.
 
