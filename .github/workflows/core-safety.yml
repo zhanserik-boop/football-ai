@@ -77,3 +77,6 @@ jobs:
 
       - name: Research shadow lineup + directional value gate
         run: python shadow_value_gate_research.py
+
+      - name: Research Lineup Shock robustness
+        run: python lineup_shock_robustness_research.py
