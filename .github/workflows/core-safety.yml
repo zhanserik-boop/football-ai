@@ -68,3 +68,6 @@ jobs:
 
       - name: Compare enriched Fair AH V2
         run: python market_anchored_fair_ah_v2.py
+
+      - name: Research AH market movement direction
+        run: python market_move_direction_research.py
