@@ -64,6 +64,8 @@ V3_REQUIRED_FILES = (
     "uninstall_v3_supervisor.ps1",
     "v3_daily_digest.py",
     "v3_emergency_drill.py",
+    "v3_freeze_guard.py",
+    "v3_frozen_manifest.json",
 )
 
 FIELDS = (

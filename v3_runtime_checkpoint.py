@@ -45,6 +45,7 @@ EVIDENCE_FILES = (
     "v3_drift_watch.csv",
     "v3_drift_watch_summary.json",
     "v3_emergency_drill_report.json",
+    "v3_freeze_guard_report.json",
     "v3_shadow_risk_report.csv",
     "v3_shadow_risk_summary.json",
     "current_squads_2026.csv",

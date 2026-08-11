@@ -2,6 +2,7 @@ import os
 
 import run_live_system as base
 import v3_external_supervisor as external_supervisor
+import v3_freeze_guard as freeze_guard
 
 LIVE_COACH_CONTEXT = "live_coach_context.py"
 MARKET_TIMELINE = "market_timeline_engine.py"
@@ -17,6 +18,8 @@ RUNTIME_CHECKPOINT = "v3_runtime_checkpoint.py"
 BACKUP_GUARD = "v3_backup_guard.py"
 EXTERNAL_SUPERVISOR = "v3_external_supervisor.py"
 DAILY_DIGEST = "v3_daily_digest.py"
+FREEZE_GUARD = "v3_freeze_guard.py"
+FREEZE_MANIFEST = "v3_frozen_manifest.json"
 
 _original_run_script = base.run_script
 
@@ -69,15 +72,18 @@ def main():
             BACKUP_GUARD,
             EXTERNAL_SUPERVISOR,
             DAILY_DIGEST,
+            FREEZE_GUARD,
+            FREEZE_MANIFEST,
         )
         if not os.path.exists(path)
     ]
     if missing:
         raise SystemExit("Missing V3 live files: " + ", ".join(missing))
 
+    freeze_guard.enforce_freeze()
     base.run_script = run_script_with_v3_context
     _original_run_script(READINESS_REPORT)
-    print("V3 orchestration: Value Gate + Outcome Audit + Scorecard + Drift Watch + Risk + Checkpoint + Backup Guard + External Supervisor + Daily Digest + Telegram + Health enabled")
+    print("V3 orchestration: FROZEN + Value Gate + Outcome Audit + Scorecard + Drift Watch + Risk + Checkpoint + Backup Guard + External Supervisor + Daily Digest + Telegram + Health enabled")
     external_supervisor.set_expected_running(True, reason="V3_START")
     try:
         base.main()
