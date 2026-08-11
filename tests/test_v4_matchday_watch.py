@@ -29,7 +29,7 @@ class V4MatchdayWatchTests(unittest.TestCase):
         self.assertEqual([row["fixture_id"] for row in pending], ["1"])
 
     def test_next_checkpoint_is_bounded_not_continuous_polling(self):
-        pending = [{"minutes_to_kickoff": 44.0}]
+        pending = [{"minutes_to_kickoff": 49.0}]
         self.assertEqual(watch.next_checkpoint_delay_minutes(pending), 4.0)
         pending = [{"minutes_to_kickoff": 39.0}]
         self.assertEqual(watch.next_checkpoint_delay_minutes(pending), 9.0)

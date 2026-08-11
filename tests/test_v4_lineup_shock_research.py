@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 
 import v4_lineup_shock_research as research
 
@@ -67,6 +68,45 @@ class V4LineupShockResearchTests(unittest.TestCase):
             {},
         )
         self.assertEqual(row["status"], "WAITING_FOR_CONFIRMED_XI")
+
+    def test_espn_research_lineup_maps_players_by_name(self):
+        result = confirmed_result([], [])
+        result["agents"]["lineup"]["status"] = "NOT_PUBLISHED"
+        audit = {
+            "status": "ESPN_ONLY_RESEARCH",
+            "espn_status": "PUBLISHED_XI",
+            "espn_home_starters": [
+                {"source_player_id": f"e{value}", "player_name": f"P{value}"}
+                for value in range(100, 111)
+            ],
+            "espn_away_starters": [
+                {"source_player_id": f"e{value}", "player_name": f"P{value}"}
+                for value in range(200, 211)
+            ],
+        }
+        row = research.evaluate_result(
+            result, {"1": profile(1), "2": profile(2)}, audit
+        )
+        self.assertEqual(row["status"], "READY_RESEARCH")
+        self.assertEqual(row["lineup_source"], "ESPN_RESEARCH")
+        self.assertEqual(row["home_lineup"]["valued_starters"], 11)
+
+    def test_source_conflict_blocks_research(self):
+        row = research.evaluate_result(
+            confirmed_result(list(range(100, 111)), list(range(200, 211))),
+            {"1": profile(1), "2": profile(2)},
+            {"status": "SOURCE_CONFLICT"},
+        )
+        self.assertEqual(row["status"], "BLOCKED")
+        self.assertEqual(row["lineup_source"], "SOURCE_CONFLICT")
+
+    def test_stale_lineup_audit_is_ignored(self):
+        now = datetime(2026, 8, 11, 12, 0, tzinfo=timezone.utc)
+        document = {
+            "generated_utc": (now - timedelta(minutes=121)).isoformat(),
+            "results": [{"fixture_id": "1", "status": "ESPN_ONLY_RESEARCH"}],
+        }
+        self.assertEqual(research.fresh_audit_map(document, now=now), {})
 
 
 if __name__ == "__main__":
