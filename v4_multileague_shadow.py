@@ -553,7 +553,9 @@ def lineup_summary(payload, home_team_id, away_team_id, query_attempted=False):
     provider_rows = payload.get("response", [])
     result = {
         "confirmed": False, "home_starters": 0, "away_starters": 0,
-        "formations": {}, "query_attempted": bool(query_attempted),
+        "formations": {}, "home_starter_ids": [], "away_starter_ids": [],
+        "home_starter_names": [], "away_starter_names": [],
+        "query_attempted": bool(query_attempted),
         "provider_records": len(provider_rows),
     }
     for team_data in provider_rows:
@@ -563,9 +565,23 @@ def lineup_summary(payload, home_team_id, away_team_id, query_attempted=False):
         if team_id == home_team_id:
             result["home_starters"] = len(starters)
             result["formations"]["home"] = clean(team_data.get("formation"))
+            result["home_starter_ids"] = [
+                (row.get("player") or {}).get("id") for row in starters
+                if (row.get("player") or {}).get("id") is not None
+            ]
+            result["home_starter_names"] = [
+                clean((row.get("player") or {}).get("name")) for row in starters
+            ]
         elif team_id == away_team_id:
             result["away_starters"] = len(starters)
             result["formations"]["away"] = clean(team_data.get("formation"))
+            result["away_starter_ids"] = [
+                (row.get("player") or {}).get("id") for row in starters
+                if (row.get("player") or {}).get("id") is not None
+            ]
+            result["away_starter_names"] = [
+                clean((row.get("player") or {}).get("name")) for row in starters
+            ]
     result["confirmed"] = result["home_starters"] >= 11 and result["away_starters"] >= 11
     return result
 
@@ -673,6 +689,11 @@ def lineup_agent(lineup, home_injuries, away_injuries):
         "value_quality": "UNVALIDATED_CROSS_LEAGUE",
         "query_attempted": lineup.get("query_attempted", False),
         "provider_records": lineup.get("provider_records", 0),
+        "home_starter_ids": lineup.get("home_starter_ids", []),
+        "away_starter_ids": lineup.get("away_starter_ids", []),
+        "home_starter_names": lineup.get("home_starter_names", []),
+        "away_starter_names": lineup.get("away_starter_names", []),
+        "formations": lineup.get("formations", {}),
         "reason": reason,
     }
 
