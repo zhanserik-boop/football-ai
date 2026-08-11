@@ -220,6 +220,69 @@ class V4MultiLeagueTests(unittest.TestCase):
         )
         self.assertEqual(decision["decision"], "PASS")
 
+    def test_moderator_bets_market_value_not_strength_direction(self):
+        quality = {"grade": "MEDIUM", "codes": ["LINEUP_NOT_CONFIRMED"]}
+        lineup = {"status": "WAITING", "value_quality": "UNVALIDATED"}
+        neutral = {"side": "NEUTRAL"}
+        decision = v4.moderator_agent(
+            {"side": "HOME", "confidence": 0.65, "fair_home_ah": -0.5},
+            {
+                "status": "OK", "current_home_handicap": -0.75,
+                "home_line_move": 0.0,
+            },
+            lineup,
+            neutral,
+            {"level": "LOW", "underdog": "AWAY"},
+            {"level": "LOW"},
+            neutral,
+            quality,
+            False,
+        )
+        self.assertEqual(decision["decision"], "WATCH")
+        self.assertEqual(decision["side"], "AWAY")
+        self.assertEqual(decision["line_value"], 0.25)
+        self.assertEqual(decision["quant_strength_side"], "HOME")
+
+    def test_neutral_strength_can_still_have_market_value(self):
+        quality = {"grade": "MEDIUM", "codes": ["LINEUP_NOT_CONFIRMED"]}
+        lineup = {"status": "WAITING", "value_quality": "UNVALIDATED"}
+        neutral = {"side": "NEUTRAL"}
+        decision = v4.moderator_agent(
+            {"side": "NEUTRAL", "confidence": 0.55, "fair_home_ah": 0.0},
+            {
+                "status": "OK", "current_home_handicap": 0.75,
+                "home_line_move": 0.0,
+            },
+            lineup,
+            neutral,
+            {"level": "LOW", "underdog": "HOME"},
+            {"level": "LOW"},
+            neutral,
+            quality,
+            False,
+        )
+        self.assertEqual(decision["decision"], "WATCH")
+        self.assertEqual(decision["side"], "HOME")
+        self.assertEqual(decision["line_value"], 0.75)
+
+    def test_sub_quarter_market_value_is_pass(self):
+        quality = {"grade": "MEDIUM", "codes": ["LINEUP_NOT_CONFIRMED"]}
+        neutral = {"side": "NEUTRAL"}
+        decision = v4.moderator_agent(
+            {"side": "HOME", "confidence": 0.6, "fair_home_ah": -0.25},
+            {"status": "OK", "current_home_handicap": -0.25},
+            {"status": "WAITING", "value_quality": "UNVALIDATED"},
+            neutral,
+            {"level": "LOW", "underdog": "AWAY"},
+            {"level": "LOW"},
+            neutral,
+            quality,
+            False,
+        )
+        self.assertEqual(decision["decision"], "PASS")
+        self.assertEqual(decision["side"], "")
+        self.assertEqual(decision["line_value"], 0.0)
+
     def test_non_prematch_fixture_is_hard_vetoed(self):
         metrics = v4.completed_team_metrics(form_payload(1, True), 1, NOW)
         market = {"status": "OK", "bookmakers": 3, "freshness": "FRESH"}

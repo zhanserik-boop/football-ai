@@ -19,7 +19,10 @@ not import, edit, or influence the frozen V3 EPL runtime. It cannot place bets.
 7. Context Agent: rest difference and qualification-stage volatility.
 8. Data Quality Agent: fail-closed evidence validation.
 9. Risk/Moderator Agent: compares independent evidence and issues `SHADOW BET`,
-   `WATCH`, or `PASS` without majority voting.
+   `WATCH`, or `PASS` without majority voting. The bet side is derived from the
+   signed Fair-AH-versus-market difference, not from the Quant strength side:
+   a home market line at least `0.25` above Fair AH is HOME value, while a line
+   at least `0.25` below Fair AH is AWAY value.
 
 ## Run
 
