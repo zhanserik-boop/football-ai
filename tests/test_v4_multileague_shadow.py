@@ -84,7 +84,7 @@ class FakeClient:
                         "id": 4,
                         "values": [
                             {"value": "Home -0.25", "odd": "1.95"},
-                            {"value": "Away +0.25", "odd": "1.95"},
+                            {"value": "Away -0.25", "odd": "1.95"},
                         ],
                     }],
                 })
@@ -140,9 +140,9 @@ class V4MultiLeagueTests(unittest.TestCase):
     def test_consensus_requires_paired_sides(self):
         rows = [
             {"bookmaker_id": "1", "bookmaker": "A", "side": "HOME", "handicap": -0.5, "odd": 1.95},
-            {"bookmaker_id": "1", "bookmaker": "A", "side": "AWAY", "handicap": 0.5, "odd": 1.95},
+            {"bookmaker_id": "1", "bookmaker": "A", "side": "AWAY", "handicap": -0.5, "odd": 1.95},
             {"bookmaker_id": "2", "bookmaker": "B", "side": "HOME", "handicap": -0.5, "odd": 2.00},
-            {"bookmaker_id": "2", "bookmaker": "B", "side": "AWAY", "handicap": 0.5, "odd": 1.90},
+            {"bookmaker_id": "2", "bookmaker": "B", "side": "AWAY", "handicap": -0.5, "odd": 1.90},
         ]
         market = v4.market_consensus(rows)
         self.assertEqual(market["home_handicap"], -0.5)
@@ -164,7 +164,7 @@ class V4MultiLeagueTests(unittest.TestCase):
                     },
                     {
                         "bookmaker_id": book_id, "bookmaker": book_id,
-                        "side": "AWAY", "handicap": -home_line, "odd": away_odd,
+                        "side": "AWAY", "handicap": home_line, "odd": away_odd,
                     },
                 ])
         market = v4.market_consensus(rows)
@@ -178,17 +178,17 @@ class V4MultiLeagueTests(unittest.TestCase):
             market["line_vote_counts"],
             [{"home_line": 1.0, "bookmakers": 3}],
         )
-        self.assertEqual(market["consensus_version"], 2)
+        self.assertEqual(market["consensus_version"], 3)
 
     def test_new_consensus_version_resets_invalid_opening_baseline(self):
         consensus = {
             "home_handicap": 1.0, "home_avg_odds": 1.95,
             "away_avg_odds": 1.95, "fair_home_cover_probability": 0.5,
             "bookmakers": 3, "best_home_odds": 2.0, "best_away_odds": 2.0,
-            "bookmakers_with_main_line": 3, "consensus_version": 2,
+            "bookmakers_with_main_line": 3, "consensus_version": 3,
         }
         old_state = {
-            "market_consensus_version": 1, "opening_home_handicap": 0.0,
+            "market_consensus_version": 2, "opening_home_handicap": 0.0,
             "last_odds_fingerprint": "old",
         }
         market = v4.market_agent(
@@ -199,7 +199,7 @@ class V4MultiLeagueTests(unittest.TestCase):
         state = {"fixtures": {"10": dict(old_state)}}
         v4.snapshot_state_update(state, "10", market, "new", {"confirmed": False}, NOW)
         self.assertEqual(state["fixtures"]["10"]["opening_home_handicap"], 1.0)
-        self.assertEqual(state["fixtures"]["10"]["market_consensus_version"], 2)
+        self.assertEqual(state["fixtures"]["10"]["market_consensus_version"], 3)
 
     def test_data_quality_veto_blocks_low_sample(self):
         low = v4.completed_team_metrics({}, 1, NOW)
