@@ -18,6 +18,7 @@ HEALTH_FILE = "system_health_live.csv"
 GATE_HISTORY_FILE = "shadow_value_gate_history.csv"
 FORWARD_FILE = "v3_forward_test_summary.json"
 DRIFT_FILE = "v3_drift_watch_summary.json"
+FREEZE_FILE = "v3_freeze_guard_report.json"
 RISK_FILE = "v3_shadow_risk_summary.json"
 BACKUP_FILE = "v3_backup_guard_status.json"
 SUPERVISOR_FILE = "v3_external_supervisor_status.json"
@@ -182,6 +183,7 @@ def build_metrics(root, now, tz):
     gate_history = read_csv_rows(root / GATE_HISTORY_FILE)
     forward_summary = read_json(root / FORWARD_FILE)
     drift = read_json(root / DRIFT_FILE)
+    freeze = read_json(root / FREEZE_FILE)
     risk = read_json(root / RISK_FILE)
     backup = read_json(root / BACKUP_FILE)
     supervisor = read_json(root / SUPERVISOR_FILE)
@@ -235,6 +237,9 @@ def build_metrics(root, now, tz):
         "drift_live_n": safe_int((drift.get("live", {}) or {}).get("eligible_total")),
         "drift_side_psi": (drift.get("drift", {}) or {}).get("side_psi", ""),
         "drift_band_psi": (drift.get("drift", {}) or {}).get("shock_band_psi", ""),
+        "freeze_status": clean(freeze.get("status")).upper() or "NOT_VERIFIED",
+        "freeze_files_verified": safe_int(freeze.get("files_verified")),
+        "freeze_files_expected": safe_int(freeze.get("files_expected")),
         "risk_status": clean(risk.get("status")).upper() or "LOCKED_BY_FORWARD_TEST",
         "risk_roi": realized.get("roi", ""),
         "risk_drawdown": realized.get("max_drawdown_fraction", ""),
@@ -287,6 +292,10 @@ def build_message(metrics, local, offset):
             f"Drift: {metrics['drift_status']} | live {metrics['drift_live_n']}/30 "
             f"| side PSI {signed(metrics['drift_side_psi'])} "
             f"| band PSI {signed(metrics['drift_band_psi'])}"
+        ),
+        (
+            f"Freeze: {metrics['freeze_status']} | files "
+            f"{metrics['freeze_files_verified']}/{metrics['freeze_files_expected']}"
         ),
         (
             f"Risk: {metrics['risk_status']} | ROI {percent(metrics['risk_roi'])} "
