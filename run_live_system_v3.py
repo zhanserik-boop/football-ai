@@ -11,6 +11,7 @@ SHADOW_NOTIFIER = "shadow_value_gate_notifier.py"
 HEALTH_WATCHDOG = "system_health_watchdog.py"
 READINESS_REPORT = "v3_readiness_report.py"
 FORWARD_TEST_SCORECARD = "v3_forward_test_scorecard.py"
+DRIFT_WATCH = "v3_drift_watch.py"
 SHADOW_RISK_ENGINE = "v3_shadow_risk_engine.py"
 RUNTIME_CHECKPOINT = "v3_runtime_checkpoint.py"
 BACKUP_GUARD = "v3_backup_guard.py"
@@ -33,6 +34,7 @@ def run_script_with_v3_context(filename):
         _original_run_script(MARKET_TIMELINE)
         _original_run_script(HEALTH_WATCHDOG)
         _original_run_script(SHADOW_VALUE_GATE)
+        _original_run_script(DRIFT_WATCH)
         _original_run_script(SHADOW_NOTIFIER)
 
     # Base refreshes closing lines/results on its normal low-frequency cycle.
@@ -40,6 +42,7 @@ def run_script_with_v3_context(filename):
     if filename == base.CLV_REPORT:
         _original_run_script(SHADOW_OUTCOME_REPORT)
         _original_run_script(FORWARD_TEST_SCORECARD)
+        _original_run_script(DRIFT_WATCH)
         _original_run_script(SHADOW_RISK_ENGINE)
         _original_run_script(RUNTIME_CHECKPOINT)
         _original_run_script(BACKUP_GUARD)
@@ -60,6 +63,7 @@ def main():
             HEALTH_WATCHDOG,
             READINESS_REPORT,
             FORWARD_TEST_SCORECARD,
+            DRIFT_WATCH,
             SHADOW_RISK_ENGINE,
             RUNTIME_CHECKPOINT,
             BACKUP_GUARD,
@@ -73,7 +77,7 @@ def main():
 
     base.run_script = run_script_with_v3_context
     _original_run_script(READINESS_REPORT)
-    print("V3 orchestration: Value Gate + Outcome Audit + Scorecard + Risk + Checkpoint + Backup Guard + External Supervisor + Daily Digest + Telegram + Health enabled")
+    print("V3 orchestration: Value Gate + Outcome Audit + Scorecard + Drift Watch + Risk + Checkpoint + Backup Guard + External Supervisor + Daily Digest + Telegram + Health enabled")
     external_supervisor.set_expected_running(True, reason="V3_START")
     try:
         base.main()
