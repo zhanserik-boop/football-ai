@@ -89,6 +89,9 @@ v3_forward_test_scorecard.csv
 v3_forward_test_summary.json
 v3_shadow_risk_report.csv
 v3_shadow_risk_summary.json
+v3_runtime_checkpoint_status.json
+runtime_checkpoints/
+runtime_restore_*/
 
 # BTTS live generated outputs
 btts_live_fixtures.csv
