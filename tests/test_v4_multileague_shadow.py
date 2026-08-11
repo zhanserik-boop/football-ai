@@ -151,6 +151,27 @@ class V4MultiLeagueTests(unittest.TestCase):
         self.assertEqual(rows[0]["bet_name"], "Asian Handicap")
         self.assertEqual(rows[0]["handicap"], -0.75)
 
+    def test_lineup_status_distinguishes_not_published_from_not_queried(self):
+        not_queried = v4.lineup_agent(
+            v4.lineup_summary({}, 1, 2, query_attempted=False), [], []
+        )
+        not_published = v4.lineup_agent(
+            v4.lineup_summary({}, 1, 2, query_attempted=True), [], []
+        )
+        incomplete = v4.lineup_agent(
+            v4.lineup_summary(
+                {"response": [{
+                    "team": {"id": 1},
+                    "startXI": [{"player": {"id": index}} for index in range(10)],
+                }]},
+                1, 2, query_attempted=True,
+            ),
+            [], [],
+        )
+        self.assertEqual(not_queried["status"], "NOT_QUERIED")
+        self.assertEqual(not_published["status"], "NOT_PUBLISHED")
+        self.assertEqual(incomplete["status"], "INCOMPLETE")
+
     def test_consensus_requires_paired_sides(self):
         rows = [
             {"bookmaker_id": "1", "bookmaker": "A", "side": "HOME", "handicap": -0.5, "odd": 1.95},
