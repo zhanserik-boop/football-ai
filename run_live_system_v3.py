@@ -9,6 +9,7 @@ SHADOW_OUTCOME_REPORT = "shadow_value_gate_outcome_report.py"
 SHADOW_NOTIFIER = "shadow_value_gate_notifier.py"
 HEALTH_WATCHDOG = "system_health_watchdog.py"
 READINESS_REPORT = "v3_readiness_report.py"
+FORWARD_TEST_SCORECARD = "v3_forward_test_scorecard.py"
 
 _original_run_script = base.run_script
 
@@ -32,6 +33,7 @@ def run_script_with_v3_context(filename):
     # Reuse that cache to evaluate Value Gate with zero additional API calls.
     if filename == base.CLV_REPORT:
         _original_run_script(SHADOW_OUTCOME_REPORT)
+        _original_run_script(FORWARD_TEST_SCORECARD)
         _original_run_script(SHADOW_NOTIFIER)
 
     return ok
@@ -47,6 +49,7 @@ def main():
             SHADOW_NOTIFIER,
             HEALTH_WATCHDOG,
             READINESS_REPORT,
+            FORWARD_TEST_SCORECARD,
         )
         if not os.path.exists(path)
     ]
@@ -55,7 +58,7 @@ def main():
 
     base.run_script = run_script_with_v3_context
     _original_run_script(READINESS_REPORT)
-    print("V3 orchestration: Value Gate + Outcome Audit + Telegram + Health enabled")
+    print("V3 orchestration: Value Gate + Outcome Audit + Scorecard + Telegram + Health enabled")
     base.main()
 
 
