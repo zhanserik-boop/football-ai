@@ -3,6 +3,7 @@ import os
 import run_live_system as base
 import v3_external_supervisor as external_supervisor
 import v3_freeze_guard as freeze_guard
+import v3_r2_runtime_migration as r2_migration
 
 LIVE_COACH_CONTEXT = "live_coach_context.py"
 MARKET_TIMELINE = "market_timeline_engine.py"
@@ -81,6 +82,7 @@ def main():
         raise SystemExit("Missing V3 live files: " + ", ".join(missing))
 
     freeze_guard.enforce_freeze()
+    r2_migration.require_migration()
     base.run_script = run_script_with_v3_context
     _original_run_script(READINESS_REPORT)
     print("V3 orchestration: FROZEN + Value Gate + Outcome Audit + Scorecard + Drift Watch + Risk + Checkpoint + Backup Guard + External Supervisor + Daily Digest + Telegram + Health enabled")

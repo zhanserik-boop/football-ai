@@ -6,6 +6,8 @@ import os
 from collections import defaultdict
 from datetime import datetime, timezone
 
+from asian_handicap_v3_r2 import signal_market
+
 SNAPSHOT_FILE = "market_snapshots_v2.csv"
 SIGNAL_FILE = "lineup_signals_live.csv"
 AH_HISTORY_FILE = "ah_agent_v2_history.csv"
@@ -90,45 +92,15 @@ def append_csv(filename, fields, rows):
 
 
 def consensus(rows, side):
-    candidates = []
-    for row in rows:
-        if clean(row.get("parsed_side")).upper() != side:
-            continue
-        handicap = safe_float(row.get("parsed_handicap"))
-        odd = safe_float(row.get("odd"))
-        if handicap is None or odd is None or odd <= 1.0:
-            continue
-        candidates.append((handicap, odd, clean(row.get("bookmaker"))))
-
-    if not candidates:
+    market = signal_market(rows, side)
+    if market is None:
         return None
-
-    counts = defaultdict(int)
-    for handicap, _, _ in candidates:
-        counts[handicap] += 1
-    max_count = max(counts.values())
-    lines = [line for line, count in counts.items() if count == max_count]
-
-    all_lines = sorted(x[0] for x in candidates)
-    if len(all_lines) % 2:
-        median = all_lines[len(all_lines) // 2]
-    else:
-        median = (
-            all_lines[len(all_lines) // 2 - 1]
-            + all_lines[len(all_lines) // 2]
-        ) / 2.0
-
-    line = min(lines, key=lambda x: abs(x - median))
-    same = [(odd, book) for h, odd, book in candidates if h == line]
-    avg_odds = sum(x[0] for x in same) / len(same)
-    best_odds, best_book = max(same, key=lambda x: x[0])
-
     return {
-        "handicap": line,
-        "avg_odds": avg_odds,
-        "best_odds": best_odds,
-        "best_bookmaker": best_book,
-        "bookmakers": len(same),
+        "handicap": market["handicap"],
+        "avg_odds": market["average_odds"],
+        "best_odds": market["best_odds"],
+        "best_bookmaker": market["best_bookmaker"],
+        "bookmakers": market["bookmakers"],
     }
 
 

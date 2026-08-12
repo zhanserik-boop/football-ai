@@ -8,7 +8,7 @@ from pathlib import Path
 MANIFEST_FILE = "v3_frozen_manifest.json"
 DRILL_FILE = "v3_emergency_drill_report.json"
 OUTPUT_FILE = "v3_freeze_guard_report.json"
-FROZEN_RELEASE = "V3_SHADOW_FROZEN_R1"
+FROZEN_RELEASE = "V3_SHADOW_FROZEN_R2"
 TEXT_SUFFIXES = {".py", ".ps1", ".json", ".md", ".yml", ".yaml"}
 
 
@@ -113,6 +113,11 @@ def verify_drill(report):
         return issue(
             "EMERGENCY_DRILL_FAILED",
             f"Latest emergency drill did not pass all scenarios ({passed}/{total})",
+        )
+    if report.get("release") != FROZEN_RELEASE:
+        return issue(
+            "EMERGENCY_DRILL_RELEASE_MISMATCH",
+            f"Run the emergency drill for {FROZEN_RELEASE}",
         )
     if any([
         report.get("real_telegram_messages_sent") != 0,

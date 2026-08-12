@@ -62,6 +62,15 @@ class MarketTimelineTests(unittest.TestCase):
             "POST_XI_UNCHANGED_OR_UNPROVEN",
         )
 
+    def test_api_football_same_label_is_inverted_for_away(self):
+        rows = []
+        for book in ("A", "B"):
+            rows.append(self.row("2026-08-21T18:10:00+00:00", 1, "HOME", -0.75, 1.95, book, 1))
+            rows.append(self.row("2026-08-21T18:10:00+00:00", 1, "AWAY", -0.75, 1.95, book, 1))
+        timeline = mte.build_market_timeline(rows)
+        self.assertEqual(float(timeline[0]["home_handicap"]), -0.75)
+        self.assertEqual(float(timeline[0]["away_handicap"]), 0.75)
+
     def test_audit_event_hash_is_stable_and_deduplicated(self):
         source = {
             "decision_time_utc": "2026-08-21T18:11:00+00:00",

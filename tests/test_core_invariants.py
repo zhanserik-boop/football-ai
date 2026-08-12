@@ -148,6 +148,24 @@ class AHAgentInvariantTests(unittest.TestCase):
         )
         self.assertEqual(result["decision"], "LATE")
 
+    def test_away_strengthening_is_late_in_signal_perspective(self):
+        result = decide(
+            self.base_row(signal="AWAY", shock_diff=-1.8),
+            self.market(0.5),
+            self.market(0.25),
+        )
+        self.assertEqual(result["decision"], "LATE")
+        self.assertAlmostEqual(result["line_move"], 0.25)
+
+    def test_away_getting_bigger_handicap_is_market_disagreement(self):
+        result = decide(
+            self.base_row(signal="AWAY", shock_diff=-1.8),
+            self.market(0.5),
+            self.market(0.75),
+        )
+        self.assertEqual(result["decision"], "WATCH")
+        self.assertAlmostEqual(result["line_move"], -0.25)
+
     def test_single_bookmaker_is_not_bet(self):
         result = decide(
             self.base_row(),

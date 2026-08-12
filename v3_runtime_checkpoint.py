@@ -48,6 +48,9 @@ EVIDENCE_FILES = (
     "v3_freeze_guard_report.json",
     "v3_shadow_risk_report.csv",
     "v3_shadow_risk_summary.json",
+    "v3_r2_migration_marker.json",
+    "v3_r2_ah_audit.csv",
+    "v3_r2_ah_audit.json",
     "current_squads_2026.csv",
     "market_monitor_v2_state.json",
 )

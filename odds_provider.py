@@ -1,10 +1,21 @@
 import hashlib
 import json
+import math
 from datetime import datetime, timezone
 
 
 class OddsProviderError(RuntimeError):
     pass
+
+
+def prematch_window_open(time_to_kickoff, maximum):
+    """True only strictly before kickoff and inside the configured horizon."""
+    try:
+        remaining = float(time_to_kickoff)
+        limit = float(maximum)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(remaining) and math.isfinite(limit) and 0 < remaining <= limit
 
 
 def utc_now_iso():

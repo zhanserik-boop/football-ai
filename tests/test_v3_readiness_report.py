@@ -27,6 +27,14 @@ def base_env():
     }
 
 
+def mark_r2_migrated(root):
+    write_json(root / readiness.r2_migration.MARKER_FILE, {
+        "status": "COMPLETED",
+        "release": readiness.r2_migration.RELEASE,
+        "files_archived": 0,
+    })
+
+
 def healthy_state(age_minutes=1):
     heartbeat = NOW - timedelta(minutes=age_minutes)
     kickoff = NOW + timedelta(hours=2)
@@ -58,6 +66,7 @@ def test_missing_api_is_hard_blocker(tmp_path):
 
 
 def test_clean_machine_is_ready_to_start_without_existing_squad(tmp_path):
+    mark_r2_migrated(tmp_path)
     rows, summary = readiness.build_readiness(
         tmp_path, environ=base_env(), now=NOW, required_files=[]
     )
@@ -68,6 +77,7 @@ def test_clean_machine_is_ready_to_start_without_existing_squad(tmp_path):
 
 
 def test_fresh_monitor_and_healthy_watchdog_are_ready(tmp_path):
+    mark_r2_migrated(tmp_path)
     write_json(tmp_path / readiness.STATE_FILE, healthy_state())
     write_csv(
         tmp_path / readiness.HEALTH_FILE,
@@ -92,6 +102,7 @@ def test_fresh_monitor_and_healthy_watchdog_are_ready(tmp_path):
 
 
 def test_stale_monitor_is_ready_to_restart(tmp_path):
+    mark_r2_migrated(tmp_path)
     write_json(tmp_path / readiness.STATE_FILE, healthy_state(age_minutes=20))
 
     _, summary = readiness.build_readiness(
@@ -103,6 +114,7 @@ def test_stale_monitor_is_ready_to_restart(tmp_path):
 
 
 def test_invalid_squad_snapshot_blocks_start(tmp_path):
+    mark_r2_migrated(tmp_path)
     write_csv(
         tmp_path / readiness.SQUADS_FILE,
         ["team_name", "player_id", "player_name", "snapshot_utc"],
@@ -123,6 +135,7 @@ def test_invalid_squad_snapshot_blocks_start(tmp_path):
 
 
 def test_secrets_are_never_returned(tmp_path):
+    mark_r2_migrated(tmp_path)
     rows, summary = readiness.build_readiness(
         tmp_path, environ=base_env(), now=NOW, required_files=[]
     )
@@ -131,3 +144,11 @@ def test_secrets_are_never_returned(tmp_path):
     assert "top-secret-api-key" not in serialized
     assert "top-secret-token" not in serialized
     assert "top-secret-chat" not in serialized
+
+
+def test_missing_r2_migration_is_hard_blocker(tmp_path):
+    _, summary = readiness.build_readiness(
+        tmp_path, environ=base_env(), now=NOW, required_files=[]
+    )
+    assert summary["overall_status"] == "BLOCKED"
+    assert "V3_R2_AH_EVIDENCE" in summary["blockers"]

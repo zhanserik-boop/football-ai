@@ -4,6 +4,8 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+import v3_r2_runtime_migration as r2_migration
+
 
 OUTPUT_FILE = "v3_readiness_report.csv"
 SUMMARY_FILE = "v3_readiness_summary.json"
@@ -66,6 +68,9 @@ V3_REQUIRED_FILES = (
     "v3_emergency_drill.py",
     "v3_freeze_guard.py",
     "v3_frozen_manifest.json",
+    "asian_handicap_v3_r2.py",
+    "v3_r2_ah_audit.py",
+    "v3_r2_runtime_migration.py",
 )
 
 FIELDS = (
@@ -191,6 +196,20 @@ def check_required_files(root, rows, required_files):
             "PASS",
             "INFO",
             f"All {len(required_files)} required files are present",
+        )
+
+
+def check_r2_migration(root, rows):
+    if r2_migration.migration_complete(root):
+        marker = r2_migration.read_marker(root)
+        add_check(
+            rows, "MIGRATION", "V3_R2_AH_EVIDENCE", "PASS", "INFO",
+            f"R1 evidence archived recoverably: {marker.get('files_archived', 0)} file(s)",
+        )
+    else:
+        add_check(
+            rows, "MIGRATION", "V3_R2_AH_EVIDENCE", "REQUIRED", "BLOCKER",
+            "Run python .\\v3_r2_runtime_migration.py --apply before V3 R2 startup",
         )
 
 
@@ -441,6 +460,7 @@ def build_readiness(root=".", environ=None, now=None, required_files=None):
     rows = []
     required = tuple(BASE_REQUIRED_FILES + V3_REQUIRED_FILES) if required_files is None else tuple(required_files)
     check_required_files(root, rows, required)
+    check_r2_migration(root, rows)
     api_ready = check_configuration(env, rows)
     check_squads(root, rows, api_ready, now)
     _, runtime_status, fixtures_48h, nearest = check_runtime(root, rows, now)
