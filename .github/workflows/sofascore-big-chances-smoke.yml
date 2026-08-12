@@ -1,0 +1,40 @@
+name: SofaScore Big Chances Smoke
+
+on:
+  push:
+    paths:
+      - 'tools/research/download_sofascore_top5_big_chances.py'
+      - '.github/workflows/sofascore-big-chances-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download 20 real SofaScore matches
+        run: |
+          python tools/research/download_sofascore_top5_big_chances.py \
+            --out sofascore_top5_smoke.csv \
+            --max-events 20 \
+            --delay 0.35
+      - name: Show sample
+        run: |
+          python - <<'PY'
+          import csv
+          p='sofascore_top5_smoke.csv'
+          with open(p, encoding='utf-8-sig') as f:
+              rows=list(csv.DictReader(f))
+          print('rows=', len(rows))
+          for r in rows[:5]:
+              print(r['league'], r['season'], r['home_team'], '-', r['away_team'], 'BC', r['home_big_chances'], r['away_big_chances'], 'xG', r['home_xg'], r['away_xg'])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sofascore-top5-smoke
+          path: sofascore_top5_smoke.csv
+          if-no-files-found: error
