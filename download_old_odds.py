@@ -148,6 +148,12 @@ def parse_match_date(value):
     return None
 
 
+def source_check_due(today=None):
+    """Do not query the rolling EPL results feed before the season starts."""
+    today = today or datetime.now(timezone.utc).date()
+    return today >= SEASON_START
+
+
 # ============================================================
 # READ / VALIDATE CSV
 # ============================================================
@@ -580,6 +586,37 @@ def main():
     # ========================================================
 
     quarantine_existing_invalid_file()
+
+    # Football-Data may return an unrelated English competition while the
+    # future-season E0 file is not published yet. The EPL identity validator
+    # already fails closed, but before kickoff there cannot be completed SOT
+    # evidence anyway, so avoid the unnecessary request entirely.
+    if not source_check_due():
+
+        print()
+        print(
+            "SOURCE CHECK DEFERRED"
+        )
+
+        print(
+            "Reason: EPL 2026/27 has not started; "
+            "no completed HST/AST evidence can exist yet."
+        )
+
+        print(
+            "Next eligible source date:",
+            SEASON_START
+        )
+
+        print(
+            "FOOTBALL-DATA REQUESTS USED: 0"
+        )
+
+        print(
+            "API-FOOTBALL REQUESTS USED: 0"
+        )
+
+        return
 
     # ========================================================
     # DOWNLOAD
