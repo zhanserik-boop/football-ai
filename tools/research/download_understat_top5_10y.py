@@ -1,6 +1,6 @@
 import csv, time
 from pathlib import Path
-from underdata.league import League
+from underdata.League import League
 
 LEAGUES={"EPL":"Premier League","La_liga":"La Liga","Serie_A":"Serie A","Bundesliga":"Bundesliga","Ligue_1":"Ligue 1"}
 SEASONS=range(2016,2026)
