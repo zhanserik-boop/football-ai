@@ -1,10 +1,28 @@
 # Football AI V3 — Shadow Freeze
 
-Frozen release: `V3_SHADOW_FROZEN_R1`
+Frozen release: `V3_SHADOW_FROZEN_R2`
 
-Revision R1 adds Windows CRLF/LF portability to hash verification. It does not change the decision engine, thresholds, or shadow-only policy.
+Revision R2 repairs a critical API-Football Asian Handicap normalization defect.
+The provider can label Home and Away prices with the same numeric home-team
+handicap. R2 pairs both prices on the same bookmaker line, selects the balanced
+main line before cross-book consensus, converts the result to the signal team's
+perspective, and validates HOME/AWAY movement, CLV and settlement separately.
 
-V3 is operationally complete and frozen in shadow-only mode. The production AH Agent and Master Agent remain unchanged, and V3 does not place real bets automatically.
+R1 AH-derived forward evidence is not compatible with R2. Before the first R2
+startup, run the recoverable migration:
+
+```powershell
+python .\v3_r2_runtime_migration.py --apply
+```
+
+It moves only allow-listed runtime evidence into a timestamped
+`runtime_archives\v3_r1_before_r2_*` directory, verifies SHA-256 after each
+move, never includes secrets, and restarts the forward test from zero.
+
+V3 is operationally complete and frozen in shadow-only mode. R2 changes only
+the AH data contract and its downstream market calculations; decision
+thresholds and Master policy remain unchanged. V3 does not place real bets
+automatically.
 
 ## Frozen decision chain
 

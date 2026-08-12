@@ -95,6 +95,10 @@ v3_emergency_drill_report.json
 v3_freeze_guard_report.json
 v3_shadow_risk_report.csv
 v3_shadow_risk_summary.json
+v3_r2_ah_audit.csv
+v3_r2_ah_audit.json
+v3_r2_migration_marker.json
+runtime_archives/
 v3_runtime_checkpoint_status.json
 runtime_checkpoints/
 runtime_restore_*/

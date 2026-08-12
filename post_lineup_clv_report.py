@@ -6,6 +6,7 @@ import numpy as np
 import requests
 
 from dotenv import load_dotenv
+from asian_handicap_v3_r2 import signal_market
 
 
 # ============================================================
@@ -442,153 +443,15 @@ def market_consensus(
     rows,
     signal
 ):
-
-    side_rows = [
-
-        x
-        for x in rows
-
-        if x[
-            "side"
-        ] == signal
-
-    ]
-
-
-    if not side_rows:
-
+    market = signal_market(rows, signal)
+    if market is None:
         return None
-
-
-    counts = {}
-
-
-    for x in side_rows:
-
-        line = x[
-            "handicap"
-        ]
-
-        counts[
-            line
-        ] = (
-            counts.get(
-                line,
-                0
-            )
-            +
-            1
-        )
-
-
-    if not counts:
-
-        return None
-
-
-    max_count = max(
-        counts.values()
-    )
-
-
-    candidate_lines = [
-
-        line
-        for line, count
-        in counts.items()
-
-        if count == max_count
-
-    ]
-
-
-    market_median = np.median([
-
-        x[
-            "handicap"
-        ]
-
-        for x in side_rows
-
-    ])
-
-
-    consensus_line = min(
-
-        candidate_lines,
-
-        key=lambda line:
-            abs(
-                line
-                -
-                market_median
-            )
-    )
-
-
-    same_line = [
-
-        x
-        for x in side_rows
-
-        if abs(
-            x[
-                "handicap"
-            ]
-            -
-            consensus_line
-        ) < 0.00001
-
-    ]
-
-
-    if not same_line:
-
-        return None
-
-
-    avg_odds = np.mean([
-
-        x[
-            "odd"
-        ]
-
-        for x in same_line
-
-    ])
-
-
-    best = max(
-        same_line,
-        key=lambda x:
-            x[
-                "odd"
-            ]
-    )
-
-
     return {
-
-        "handicap":
-            consensus_line,
-
-        "avg_odds":
-            avg_odds,
-
-        "best_odds":
-            best[
-                "odd"
-            ],
-
-        "best_bookmaker":
-            best[
-                "bookmaker"
-            ],
-
-        "books":
-            len(
-                same_line
-            ),
+        "handicap": market["handicap"],
+        "avg_odds": market["average_odds"],
+        "best_odds": market["best_odds"],
+        "best_bookmaker": market["best_bookmaker"],
+        "books": market["bookmakers"],
     }
 
 

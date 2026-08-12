@@ -5,10 +5,17 @@ from odds_provider import (
     OddsProviderError,
     build_odds_provider,
     odds_fingerprint,
+    prematch_window_open,
 )
 
 
 class OddsProviderTests(unittest.TestCase):
+    def test_prematch_window_is_strict_at_kickoff(self):
+        self.assertTrue(prematch_window_open(0.01, 48))
+        self.assertFalse(prematch_window_open(0, 48))
+        self.assertFalse(prematch_window_open(-0.01, 48))
+        self.assertFalse(prematch_window_open(49, 48))
+
     def test_api_football_normalizes_ah_rows(self):
         calls = []
 

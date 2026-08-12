@@ -16,8 +16,8 @@ class V3EmergencyDrillTests(unittest.TestCase):
             root = Path(directory)
             report = mod.build_drill(root, now=NOW)
             self.assertEqual(report["status"], "PASSED")
-            self.assertEqual(report["scenarios_passed"], 3)
-            self.assertEqual(report["scenarios_total"], 3)
+            self.assertEqual(report["scenarios_passed"], 4)
+            self.assertEqual(report["scenarios_total"], 4)
             self.assertEqual(report["real_telegram_messages_sent"], 0)
             self.assertEqual(report["football_data_api_requests_used"], 0)
             self.assertEqual(

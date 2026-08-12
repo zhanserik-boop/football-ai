@@ -13,9 +13,11 @@ import system_health_watchdog as health_watchdog
 import v3_backup_guard as backup_guard
 import v3_external_supervisor as supervisor
 import v3_runtime_checkpoint as checkpoint
+import asian_handicap_v3_r2 as asian_handicap
 
 
 OUTPUT_FILE = "v3_emergency_drill_report.json"
+FROZEN_RELEASE = "V3_SHADOW_FROZEN_R2"
 
 
 def utc_now():
@@ -211,6 +213,28 @@ def run_scenario(name, callback):
         return {"name": name, "status": "FAIL", "detail": f"{type(exc).__name__}: {exc}"}
 
 
+def asian_handicap_r2_scenario():
+    rows = []
+    # Alternative line first on purpose: R2 must choose the balanced main line.
+    for bookmaker in ("A", "B", "C"):
+        rows.extend([
+            {"bookmaker": bookmaker, "side": "HOME", "handicap": -1.0, "odd": 2.50},
+            {"bookmaker": bookmaker, "side": "AWAY", "handicap": -1.0, "odd": 1.55},
+            {"bookmaker": bookmaker, "side": "HOME", "handicap": -0.5, "odd": 1.94},
+            {"bookmaker": bookmaker, "side": "AWAY", "handicap": -0.5, "odd": 1.96},
+        ])
+    market = asian_handicap.market_consensus(rows)
+    require(market is not None, "paired AH market was not normalized")
+    require(market["home_handicap"] == -0.5, "alternative AH line became the main line")
+    away = asian_handicap.signal_market(rows, "AWAY")
+    require(away["handicap"] == 0.5, "AWAY signal handicap was not inverted")
+    require(
+        asian_handicap.line_move_toward_signal(-0.5, -0.25, "AWAY") == 0.25,
+        "AWAY market movement direction is reversed",
+    )
+    return "balanced main line, same-label provider layout, and AWAY direction verified"
+
+
 def build_drill(root=".", now=None):
     root = Path(root)
     now = now or utc_now()
@@ -229,9 +253,11 @@ def build_drill(root=".", now=None):
                 "CHECKPOINT_MIRROR_CORRUPTION_RESTORE",
                 lambda: checkpoint_backup_scenario(sandbox, now),
             ),
+            run_scenario("AH_R2_NORMALIZATION", asian_handicap_r2_scenario),
         ]
     passed = sum(row["status"] == "PASS" for row in results)
     report = {
+        "release": FROZEN_RELEASE,
         "checked_utc": now.isoformat(),
         "status": "PASSED" if passed == len(results) else "FAILED",
         "scenarios_passed": passed,

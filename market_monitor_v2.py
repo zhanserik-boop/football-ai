@@ -9,8 +9,13 @@ from datetime import datetime, timedelta, timezone
 import requests
 from dotenv import load_dotenv
 
+from asian_handicap_v3_r2 import (
+    NORMALIZATION_VERSION,
+    parse_provider_value,
+    signal_market,
+)
 from live_lineup_engine import LiveLineupEngine
-from odds_provider import build_odds_provider
+from odds_provider import build_odds_provider, prematch_window_open
 
 
 # =========================================================
@@ -234,7 +239,7 @@ def refresh_fixtures():
             continue
 
         hours_to_match = (kickoff - now).total_seconds() / 3600
-        if not (-0.1 <= hours_to_match <= LOOKAHEAD_HOURS):
+        if not prematch_window_open(hours_to_match, LOOKAHEAD_HOURS):
             continue
 
         fixture_id = str(fixture_id)
@@ -261,7 +266,7 @@ def refresh_fixtures():
             continue
 
         old_hours_to_match = (old_kickoff - now).total_seconds() / 3600
-        if 0 < old_hours_to_match <= LOOKAHEAD_HOURS:
+        if prematch_window_open(old_hours_to_match, LOOKAHEAD_HOURS):
             found[old_id] = old_fixture
             carried_forward += 1
 
@@ -433,29 +438,13 @@ def freshness_after_signal(fixture_id, signal_time, observation):
 # =========================================================
 
 def parse_ah_value(value):
-    if not value:
+    parsed = parse_provider_value(value)
+    if parsed is None:
         return None
-
-    text = value.strip().replace("−", "-")
-    lower = text.lower()
-
-    if lower.startswith("home"):
-        side = "HOME"
-    elif lower.startswith("away"):
-        side = "AWAY"
-    else:
-        return None
-
-    numbers = re.findall(r"[-+]?\d+(?:\.\d+)?", text)
-    if not numbers:
-        return None
-
-    try:
-        handicap = float(numbers[-1])
-    except Exception:
-        return None
-
-    return {"side": side, "handicap": handicap}
+    return {
+        "side": parsed["side"],
+        "handicap": parsed["provider_handicap"],
+    }
 
 
 # =========================================================
@@ -463,6 +452,7 @@ def parse_ah_value(value):
 # =========================================================
 
 SNAPSHOT_FIELDS = [
+    "ah_normalization_version",
     "snapshot_utc",
     "fixture_id",
     "kickoff_utc",
@@ -506,6 +496,7 @@ def save_snapshot(fixture, odds, observation):
             SNAPSHOT_FILE,
             SNAPSHOT_FIELDS,
             {
+                "ah_normalization_version": NORMALIZATION_VERSION,
                 "snapshot_utc": now.isoformat(),
                 "fixture_id": fixture_id,
                 "kickoff_utc": fixture["kickoff"],
@@ -538,70 +529,23 @@ def save_snapshot(fixture, odds, observation):
 # =========================================================
 
 def get_signal_market(odds, signal):
-    candidates = []
-
+    normalized = []
     for item in odds:
-        parsed = parse_ah_value(item["value"])
-        if not parsed or parsed["side"] != signal:
+        parsed = parse_ah_value(item.get("value"))
+        if parsed is None:
             continue
-
-        try:
-            odd = float(item["odd"])
-        except Exception:
-            continue
-
-        candidates.append(
-            {
-                "bookmaker": item["bookmaker"],
-                "bookmaker_id": item["bookmaker_id"],
-                "handicap": parsed["handicap"],
-                "odd": odd,
-            }
-        )
-
-    if not candidates:
+        normalized.append({
+            "bookmaker_id": item.get("bookmaker_id"),
+            "bookmaker": item.get("bookmaker"),
+            "side": parsed["side"],
+            "handicap": parsed["handicap"],
+            "odd": item.get("odd"),
+        })
+    market = signal_market(normalized, signal)
+    if market is None:
         return None
-
-    counts = {}
-    for x in candidates:
-        line = x["handicap"]
-        counts[line] = counts.get(line, 0) + 1
-
-    max_count = max(counts.values())
-    candidate_lines = [
-        line for line, count in counts.items() if count == max_count
-    ]
-
-    ordered_lines = sorted(x["handicap"] for x in candidates)
-    n_lines = len(ordered_lines)
-    if n_lines % 2 == 1:
-        median_line = ordered_lines[n_lines // 2]
-    else:
-        median_line = (
-            ordered_lines[n_lines // 2 - 1]
-            + ordered_lines[n_lines // 2]
-        ) / 2.0
-
-    consensus_line = min(
-        candidate_lines,
-        key=lambda line: abs(line - median_line),
-    )
-
-    same_line = [
-        x for x in candidates if x["handicap"] == consensus_line
-    ]
-
-    average_odds = sum(x["odd"] for x in same_line) / len(same_line)
-    best_odds = max(x["odd"] for x in same_line)
-    best_book = max(same_line, key=lambda x: x["odd"])
-
-    return {
-        "handicap": consensus_line,
-        "average_odds": average_odds,
-        "best_odds": best_odds,
-        "best_bookmaker": best_book["bookmaker"],
-        "bookmakers_on_line": len(same_line),
-    }
+    market["bookmakers_on_line"] = market.pop("bookmakers")
+    return market
 
 
 # =========================================================
@@ -609,6 +553,7 @@ def get_signal_market(odds, signal):
 # =========================================================
 
 SIGNAL_FIELDS = [
+    "ah_normalization_version",
     "signal_time_utc",
     "entry_time_utc",
     "fixture_id",
@@ -704,6 +649,7 @@ def capture_entry_if_needed(fixture, odds, observation):
     minutes_signal = (kickoff - signal_time).total_seconds() / 60
 
     entry = {
+        "ah_normalization_version": NORMALIZATION_VERSION,
         "signal_time_utc": result["signal_time"],
         "entry_time_utc": now.isoformat(),
         "fixture_id": fixture_id,
@@ -805,7 +751,7 @@ def process_fixture(fixture):
     now = utc_now()
     minutes_to_kickoff = (kickoff - now).total_seconds() / 60
 
-    if minutes_to_kickoff <= 0:
+    if not prematch_window_open(minutes_to_kickoff, LOOKAHEAD_HOURS * 60):
         return
 
     lineup_seen = fixture_id in state["lineup_results"]

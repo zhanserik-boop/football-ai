@@ -23,7 +23,7 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install numpy pandas requests python-dotenv
+          python -m pip install numpy pandas requests python-dotenv pytest
 
       - name: Compile tracked Python source
         run: |
@@ -45,8 +45,8 @@ jobs:
           print("Tracked Python compile: PASS")
           PY
 
-      - name: Run frozen core invariant tests
-        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Run all invariant tests
+        run: python -m pytest tests -v
 
       - name: Build historical context database
         run: python historical_context_builder.py

@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
+from asian_handicap_v3_r2 import signal_market
+
 
 # ============================================================
 # CONFIG
@@ -323,132 +325,11 @@ def consensus_from_rows(rows, signal):
     if rows.empty:
         return None
 
-    x = rows[
-        rows["parsed_side"]
-        ==
-        signal
-    ].copy()
-
-    if x.empty:
+    market = signal_market(rows.to_dict("records"), signal)
+    if market is None:
         return None
-
-    x = x.dropna(
-        subset=[
-            "parsed_handicap",
-            "odd"
-        ]
-    )
-
-    if x.empty:
-        return None
-
-    # Number of bookmakers on each exact AH line
-    counts = (
-        x.groupby(
-            "parsed_handicap"
-        )
-        .size()
-        .sort_values(
-            ascending=False
-        )
-    )
-
-    if len(counts) == 0:
-        return None
-
-    max_count = counts.iloc[0]
-
-    candidate_lines = (
-        counts[
-            counts == max_count
-        ]
-        .index
-        .tolist()
-    )
-
-    # Tie-break:
-    # choose the line closest to the median market line
-    median_line = (
-        x["parsed_handicap"]
-        .median()
-    )
-
-    consensus_line = min(
-        candidate_lines,
-        key=lambda line:
-            abs(
-                line
-                -
-                median_line
-            )
-    )
-
-    same = x[
-        x["parsed_handicap"]
-        ==
-        consensus_line
-    ].copy()
-
-    if same.empty:
-        return None
-
-    avg_odds = (
-        same["odd"]
-        .mean()
-    )
-
-    best_odds = (
-        same["odd"]
-        .max()
-    )
-
-    best_bookmaker = ""
-
-    if "bookmaker" in same.columns:
-
-        best_row = same.loc[
-            same["odd"].idxmax()
-        ]
-
-        best_bookmaker = str(
-            best_row.get(
-                "bookmaker",
-                ""
-            )
-        )
-
-    snapshot_time = (
-        same["snapshot_dt"]
-        .max()
-    )
-
-    return {
-        "snapshot_time":
-            snapshot_time,
-
-        "handicap":
-            float(
-                consensus_line
-            ),
-
-        "average_odds":
-            float(
-                avg_odds
-            ),
-
-        "best_odds":
-            float(
-                best_odds
-            ),
-
-        "best_bookmaker":
-            best_bookmaker,
-
-        "bookmakers":
-            int(
-                len(same)
-            ),
-    }
+    market["snapshot_time"] = rows["snapshot_dt"].max()
+    return market
 
 
 # ============================================================

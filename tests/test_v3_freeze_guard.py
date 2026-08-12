@@ -16,6 +16,7 @@ def write_json(path, value):
 
 def passed_drill():
     return {
+        "release": mod.FROZEN_RELEASE,
         "status": "PASSED",
         "scenarios_passed": 3,
         "scenarios_total": 3,

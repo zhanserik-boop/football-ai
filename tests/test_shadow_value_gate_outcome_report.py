@@ -60,6 +60,15 @@ class ShadowValueGateOutcomeReportTests(unittest.TestCase):
         profit = mod.settle_ah("HOME", -0.75, 2.0, 2, 1)
         self.assertAlmostEqual(profit, 0.5)
 
+    def test_away_signal_clv_and_settlement_use_away_perspective(self):
+        outcomes = mod.build_outcomes(
+            [gate_row(signal="AWAY", entry_handicap="0.5")],
+            [post_row(close_handicap="0.25", home_goals="1", away_goals="2")],
+            now=NOW,
+        )
+        self.assertAlmostEqual(outcomes[0]["line_clv"], 0.25)
+        self.assertAlmostEqual(outcomes[0]["profit"], 1.0)
+
     def test_pending_match_has_no_profit(self):
         outcomes = mod.build_outcomes(
             [gate_row()], [post_row(match_status="NS", home_goals="", away_goals="")],
